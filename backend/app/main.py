@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import (
     traffic_router, threats_router, packets_router, 
-    admin_router, notifications_router
+    admin_router, notifications_router, health_router
 )
 import os
 from dotenv import load_dotenv
@@ -27,21 +27,20 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(health_router)
 app.include_router(traffic_router)
 app.include_router(threats_router)
 app.include_router(packets_router)
 app.include_router(admin_router)
 app.include_router(notifications_router)
+
+@app.get("/")
 async def root():
     return {
         "message": "ChaosFaction API",
         "docs": "/docs",
         "version": "1.0.0"
     }
-
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
 
 if __name__ == "__main__":
     import uvicorn
