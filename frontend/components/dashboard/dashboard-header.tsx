@@ -34,27 +34,28 @@ interface DashboardHeaderProps {
 export function DashboardHeader({ activeTab, onTabChange }: DashboardHeaderProps) {
   const [profileOpen, setProfileOpen] = useState(false)
   const [userName, setUserName] = useState("Admin User")
-  const [archivedAlerts, setArchivedAlerts] = useState<string[]>([])
+  const [archivedAlerts, setArchivedAlerts] = useState<any[]>([])
   const [showArchived, setShowArchived] = useState(false)
-  const [alerts, setAlerts] = useState([
-    {
-      id: "alert-1",
-      alertType: "malicious" as const,
-      userIp: "192.168.1.105",
-      threat: "Trojan.GenericKD.5589823",
-      timestamp: "2 min ago",
-      actionTaken: "blocked" as const,
-      isMalicious: true,
-    },
-    {
-      id: "alert-2",
-      alertType: "high-risk" as const,
-      userIp: "10.0.0.42",
-      threat: "Port Scan Detected",
-      timestamp: "5 min ago",
-      isMalicious: false,
-    },
-  ])
+  const [alerts, setAlerts] = useState<any[]>([])
+  const [loadingAlerts, setLoadingAlerts] = useState(true)
+
+  useEffect(() => {
+    const fetchAlerts = async () => {
+      try {
+        const { getNotifications } = await import("@/lib/api")
+        const data = await getNotifications()
+        setAlerts(data.notifications || [])
+        setLoadingAlerts(false)
+      } catch (err) {
+        console.error("Failed to fetch notifications:", err)
+        setLoadingAlerts(false)
+      }
+    }
+
+    fetchAlerts()
+    const interval = setInterval(fetchAlerts, 3000)
+    return () => clearInterval(interval)
+  }, [])
 
   return (
     <header className="flex h-16 items-center justify-between border-b border-border bg-card px-6">
@@ -72,7 +73,7 @@ export function DashboardHeader({ activeTab, onTabChange }: DashboardHeaderProps
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="relative">
               <Bell className="h-5 w-5" />
-              {alerts.length > 0 && (
+              {!loadingAlerts && alerts.length > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] text-destructive-foreground font-semibold">
                   {alerts.length}
                 </span>
@@ -105,7 +106,7 @@ export function DashboardHeader({ activeTab, onTabChange }: DashboardHeaderProps
                 size="sm"
                 className="w-full h-6 px-2 text-xs text-muted-foreground hover:text-foreground justify-center"
                 onClick={() => {
-                  setArchivedAlerts([...archivedAlerts, ...alerts.map(a => a.id)])
+                  setArchivedAlerts([...archivedAlerts, ...alerts])
                   setAlerts([])
                 }}
               >
@@ -113,15 +114,19 @@ export function DashboardHeader({ activeTab, onTabChange }: DashboardHeaderProps
               </Button>
             )}
             <DropdownMenuSeparator />
-            {(showArchived ? archivedAlerts.length > 0 : alerts.length > 0) ? (
+            {loadingAlerts ? (
+              <div className="p-4 text-center text-sm text-slate-500">Loading notifications...</div>
+            ) : (showArchived ? archivedAlerts.length > 0 : alerts.length > 0) ? (
               <div className="max-h-96 overflow-y-auto space-y-2 p-2">
-                {(showArchived ? [] : alerts).map(alert => {
-                  const isMalicious = alert.alertType === "malicious"
-                  const alertColor = isMalicious
+                {(showArchived ? archivedAlerts : alerts).map((alert) => {
+                  const severity = alert.severity || "MEDIUM"
+                  const alertColor = severity === "CRITICAL"
                     ? "border-destructive/30 bg-destructive/5"
-                    : alert.alertType === "high-risk"
-                      ? "border-warning/30 bg-warning/5"
-                      : "border-yellow-500/30 bg-yellow-500/5"
+                    : severity === "HIGH"
+                      ? "border-red-500/30 bg-red-500/5"
+                      : severity === "MEDIUM"
+                        ? "border-yellow-500/30 bg-yellow-500/5"
+                        : "border-blue-500/30 bg-blue-500/5"
 
                   return (
                     <div key={alert.id} className={`p-3 rounded-lg border ${alertColor} space-y-2`}>
@@ -129,53 +134,30 @@ export function DashboardHeader({ activeTab, onTabChange }: DashboardHeaderProps
                         <Badge
                           variant="outline"
                           className={
-                            isMalicious
+                            severity === "CRITICAL"
                               ? "bg-destructive text-destructive-foreground border-destructive"
-                              : alert.alertType === "high-risk"
-                                ? "bg-warning text-warning-foreground border-warning"
-                                : "bg-yellow-600 text-yellow-50 border-yellow-600"
+                              : severity === "HIGH"
+                                ? "bg-red-600 text-red-50 border-red-600"
+                                : severity === "MEDIUM"
+                                  ? "bg-yellow-600 text-yellow-50 border-yellow-600"
+                                  : "bg-blue-600 text-blue-50 border-blue-600"
                           }
                         >
-                          {alert.alertType.toUpperCase()}
+                          {severity}
                         </Badge>
                         <span className="text-xs text-muted-foreground">{alert.timestamp}</span>
                       </div>
                       <div className="space-y-1 text-sm">
-                        <div className="flex justify-between items-start">
-                          <span className="text-muted-foreground">User IP:</span>
-                          <code className="bg-secondary/50 px-2 py-0.5 rounded text-foreground font-mono text-xs">
-                            {alert.userIp}
-                          </code>
-                        </div>
-                        <div className="flex justify-between items-start">
-                          <span className="text-muted-foreground">Threat:</span>
-                          <span className="font-medium text-foreground text-right max-w-[60%]">
-                            {alert.threat}
-                          </span>
-                        </div>
+                        <p className="font-medium text-foreground">{alert.title}</p>
+                        <p className="text-xs text-muted-foreground">{alert.message}</p>
                       </div>
-                      {isMalicious && (
-                        <div className="flex items-center gap-2 p-2 rounded bg-destructive/10 border border-destructive/20 text-xs">
-                          <AlertCircle className="h-3 w-3 text-destructive flex-shrink-0" />
-                          <span className="text-destructive font-medium">Direct Block Applied</span>
-                        </div>
-                      )}
-                      <button
-                        onClick={() => {
-                          setArchivedAlerts([...archivedAlerts, alert.id])
-                          setAlerts(alerts.filter(a => a.id !== alert.id))
-                        }}
-                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        Archive
-                      </button>
                     </div>
                   )
                 })}
               </div>
             ) : (
-              <div className="p-6 text-center">
-                <p className="text-sm text-muted-foreground">No active alerts</p>
+              <div className="p-4 text-center text-sm text-slate-500">
+                {showArchived ? "No archived notifications" : "All clear! No active threats."}
               </div>
             )}
           </DropdownMenuContent>
