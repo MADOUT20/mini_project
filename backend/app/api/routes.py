@@ -175,7 +175,7 @@ async def get_threats(
         
         # Filter by parameters
         filtered_threats = threats
-        if status:
+        if status and status.lower() != "all":
             filtered_threats = [t for t in filtered_threats if t.get("status") == status]
         if severity:
             filtered_threats = [t for t in filtered_threats if t.get("severity") == severity]
@@ -186,6 +186,26 @@ async def get_threats(
             "threats": filtered_threats,
             "last_scan": datetime.now().isoformat()
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@threats_router.post("/demo")
+async def generate_demo_threat(
+    scenario: str = Query(
+        "random",
+        description="Demo scenario: random, dns, beaconing, exfiltration, all",
+    )
+):
+    """Generate safe demo threats for the dashboard."""
+    try:
+        result = await threat_service.generate_demo_threat(scenario)
+
+        if result.get("success"):
+            return result
+
+        raise HTTPException(status_code=400, detail=result.get("error", "Failed to generate demo threat"))
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -200,9 +220,9 @@ async def respond_to_threat(
         
         if result.get("success"):
             return result
-        else:
-            raise HTTPException(status_code=404, detail=result.get("error"))
-    
+        raise HTTPException(status_code=404, detail=result.get("error"))
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -503,7 +523,7 @@ async def health_check():
         "timestamp": datetime.now().isoformat()
     }
 
-# ===== NOTIFICATIONS ROUTER (Placeholder) =====
+# ===== NOTIFICATIONS ROUTER =====
 notifications_router = APIRouter(prefix="/api/notifications", tags=["Notifications"])
 
 @notifications_router.get("")
@@ -511,23 +531,12 @@ async def get_notifications():
     """Get recent notifications"""
     packets = packet_service.packets
     stats = await packet_service.get_packet_statistics()
-    threats = await threat_service.detect_threats(packets, stats) if packets else []
-    recent_threats = threats[:10]
+    threats = await threat_service.detect_threats(packets, stats)
+    notifications = threat_service.get_notifications(threats)
     
     return {
-        "notifications": [
-            {
-                "id": t.get("id"),
-                "type": "THREAT_DETECTED",
-                "title": f"Threat Detected: {t.get('type')}",
-                "message": t.get("description"),
-                "severity": t.get("severity"),
-                "timestamp": t.get("timestamp"),
-                "read": False
-            }
-            for t in recent_threats
-        ],
-        "total": len(recent_threats)
+        "notifications": notifications,
+        "total": len(notifications)
     }
 
 # ===== USERS ROUTES =====

@@ -267,6 +267,11 @@ export function PacketInspectionPanel() {
                     Ports: {packet.source_port || "-"}:{packet.dest_port || "-"}
                   </p>
                 )}
+                {packet.dns_query && (
+                  <p className="mt-1 text-slate-500">
+                    DNS Query: {packet.dns_query}
+                  </p>
+                )}
               </div>
             ))
           )}

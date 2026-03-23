@@ -44,6 +44,8 @@ export interface Threat {
   description: string
   timestamp: string
   status: string
+  action_taken?: string
+  demo?: boolean
 }
 
 export interface Packet {
@@ -51,10 +53,13 @@ export interface Packet {
   source_ip: string | null
   dest_ip: string | null
   protocol: string
+  application_protocol?: string | null
   source_port?: number | null
   dest_port?: number | null
   size_bytes: number
   flags?: string[]
+  dns_query?: string | null
+  dns_query_type?: string | null
 }
 
 export interface Notification {
@@ -65,6 +70,21 @@ export interface Notification {
   severity: string
   timestamp: string
   read: boolean
+}
+
+export interface ThreatActionResponse {
+  success: boolean
+  message: string
+  threat_id: string
+  action: string
+  status: string
+}
+
+export interface DemoThreatResponse {
+  success: boolean
+  scenario: string
+  threats_created: number
+  threats: Threat[]
 }
 
 export interface User {
@@ -204,11 +224,20 @@ export async function getTrafficHistory(timeRange = "hour") {
 // ===== THREAT ENDPOINTS =====
 
 export async function getThreats(
-  status = "active",
+  status = "all",
   severity?: string,
 ): Promise<{ threats: Threat[] }> {
   return apiRequest<{ threats: Threat[] }>(
     buildUrl("/api/threats", { status, severity }),
+  )
+}
+
+export async function generateDemoThreat(scenario = "random"): Promise<DemoThreatResponse> {
+  return apiRequest<DemoThreatResponse>(
+    buildUrl("/api/threats/demo", { scenario }),
+    {
+      method: "POST",
+    },
   )
 }
 
@@ -222,8 +251,8 @@ export async function getThreatIntelligence(threatId: string) {
   return apiRequest(`/api/threats/${encodeURIComponent(threatId)}/intelligence`)
 }
 
-export async function respondToThreat(threatId: string, action: string) {
-  return apiRequest(
+export async function respondToThreat(threatId: string, action: string): Promise<ThreatActionResponse> {
+  return apiRequest<ThreatActionResponse>(
     buildUrl(`/api/threats/${encodeURIComponent(threatId)}/respond`, { action }),
     {
       method: "POST",

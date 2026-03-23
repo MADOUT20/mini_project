@@ -7,18 +7,38 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { AlertTriangle, Shield, Zap, RefreshCw } from "lucide-react"
-import { getThreats, respondToThreat, Threat } from "@/lib/api"
+import { generateDemoThreat, getThreats, respondToThreat, Threat } from "@/lib/api"
+
+const DASHBOARD_REFRESH_EVENT = "chaosfaction:dashboard-refresh"
+
+function emitDashboardRefresh() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(DASHBOARD_REFRESH_EVENT))
+  }
+}
+
+function getSeverityClass(severity: Threat["severity"]) {
+  if (severity === "CRITICAL") return "bg-red-50 border-red-200"
+  if (severity === "HIGH") return "bg-orange-50 border-orange-200"
+  if (severity === "MEDIUM") return "bg-yellow-50 border-yellow-200"
+  return "bg-blue-50 border-blue-200"
+}
+
+function formatStatus(status: string) {
+  return status.replace(/_/g, " ").replace(/\b\w/g, (match) => match.toUpperCase())
+}
 
 export function ThreatDetectionPanel() {
   const [threats, setThreats] = useState<Threat[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [message, setMessage] = useState("")
 
   const fetchThreats = async () => {
     try {
       setLoading(true)
-      const data = await getThreats("active")
-      setThreats(data.threats || [])
+      const data = await getThreats("all")
+      setThreats((data.threats || []).filter((threat) => threat.status !== "ignored"))
       setError("")
     } catch (err: any) {
       console.error("Failed to fetch threats:", err)
@@ -30,20 +50,28 @@ export function ThreatDetectionPanel() {
 
   useEffect(() => {
     fetchThreats()
-    // Refresh every 5 seconds
     const interval = setInterval(fetchThreats, 5000)
-    return () => clearInterval(interval)
+    const handleRefresh = () => fetchThreats()
+    window.addEventListener(DASHBOARD_REFRESH_EVENT, handleRefresh)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener(DASHBOARD_REFRESH_EVENT, handleRefresh)
+    }
   }, [])
 
   const handleThreatAction = async (threatId: string, action: string) => {
     try {
-      await respondToThreat(threatId, action)
-      alert(`Threat ${action.toLowerCase()}ed successfully!`)
-      fetchThreats()
+      const result = await respondToThreat(threatId, action)
+      setMessage(result.message || `Threat ${action.toLowerCase()} completed`)
+      emitDashboardRefresh()
+      await fetchThreats()
     } catch (err) {
-      alert("Failed to respond to threat")
+      setMessage("Failed to respond to threat")
     }
   }
+
+  const visibleThreats = threats.slice(0, 5)
 
   if (loading && threats.length === 0) {
     return (
@@ -74,35 +102,37 @@ export function ThreatDetectionPanel() {
       </CardHeader>
       <CardContent className="space-y-3">
         {error && <div className="text-red-500 text-sm">{error}</div>}
+        {message && <div className="text-sm text-slate-600">{message}</div>}
         
         {threats.length === 0 ? (
           <div className="p-3 bg-green-50 border border-green-200 rounded text-center">
-            <p className="text-sm font-medium text-green-700">✅ No threats detected</p>
+            <p className="text-sm font-medium text-green-700">No threats detected</p>
             <p className="text-xs text-green-600">Network is secure</p>
           </div>
         ) : (
-          threats.slice(0, 3).map((threat) => (
-            <div key={threat.id} className={`p-3 border rounded ${
-              threat.severity === "CRITICAL" ? "bg-red-50 border-red-200" :
-              threat.severity === "HIGH" ? "bg-orange-50 border-orange-200" :
-              threat.severity === "MEDIUM" ? "bg-yellow-50 border-yellow-200" :
-              "bg-blue-50 border-blue-200"
-            }`}>
+          visibleThreats.map((threat) => (
+            <div key={threat.id} className={`p-3 border rounded ${getSeverityClass(threat.severity)}`}>
               <div className="flex justify-between items-start mb-2">
                 <div>
                   <p className="font-medium text-sm">{threat.type}</p>
                   <p className="text-xs text-slate-600">Source: {threat.source_ip}</p>
                 </div>
-                <Badge 
-                  variant={threat.severity === "CRITICAL" ? "destructive" : "default"}
-                  className={
-                    threat.severity === "HIGH" ? "bg-orange-600" :
-                    threat.severity === "MEDIUM" ? "bg-yellow-600" :
-                    "bg-blue-600"
-                  }
-                >
-                  {threat.severity}
-                </Badge>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Badge
+                    variant={threat.severity === "CRITICAL" ? "destructive" : "default"}
+                    className={
+                      threat.severity === "HIGH"
+                        ? "bg-orange-600"
+                        : threat.severity === "MEDIUM"
+                          ? "bg-yellow-600"
+                          : "bg-blue-600"
+                    }
+                  >
+                    {threat.severity}
+                  </Badge>
+                  <Badge variant="outline">{formatStatus(threat.status)}</Badge>
+                  {threat.demo && <Badge variant="secondary">Demo</Badge>}
+                </div>
               </div>
               <p className="text-xs text-slate-600 mb-2">{threat.description}</p>
               <p className="text-xs text-slate-500 mb-2">Confidence: {(threat.threat_score * 100).toFixed(0)}%</p>
@@ -111,8 +141,9 @@ export function ThreatDetectionPanel() {
                   size="sm" 
                   className="bg-red-600 hover:bg-red-700 text-xs"
                   onClick={() => handleThreatAction(threat.id, "BLOCK")}
+                  disabled={threat.status === "blocked"}
                 >
-                  Block
+                  {threat.status === "blocked" ? "Blocked" : "Block"}
                 </Button>
                 <Button 
                   size="sm" 
@@ -132,25 +163,40 @@ export function ThreatDetectionPanel() {
 }
 
 export function ThreatResponsePanel() {
-  const [responding, setResponding] = useState(false)
+  const [busyAction, setBusyAction] = useState<string | null>(null)
+  const [message, setMessage] = useState("")
 
   const handleQuickResponse = async (action: string) => {
-    setResponding(true)
+    setBusyAction(action)
     try {
       const data = await getThreats("active")
       const threats = data.threats || []
       
       if (threats.length > 0) {
         const threat = threats[0]
-        await respondToThreat(threat.id, action)
-        alert(`Quick action '${action}' executed!`)
+        const result = await respondToThreat(threat.id, action)
+        setMessage(result.message || `Quick action '${action}' executed`)
+        emitDashboardRefresh()
       } else {
-        alert("No active threats to respond to")
+        setMessage("No active threats to respond to right now")
       }
     } catch (err) {
-      alert("Failed to execute action")
+      setMessage("Failed to execute action")
     }
-    setResponding(false)
+    setBusyAction(null)
+  }
+
+  const handleGenerateDemo = async (scenario: string) => {
+    setBusyAction(`demo-${scenario}`)
+    try {
+      const result = await generateDemoThreat(scenario)
+      const label = scenario === "all" ? "demo threat pack" : "demo threat"
+      setMessage(result.success ? `Generated ${label} successfully` : `Failed to generate ${label}`)
+      emitDashboardRefresh()
+    } catch (err) {
+      setMessage("Failed to generate demo threats")
+    }
+    setBusyAction(null)
   }
 
   return (
@@ -162,18 +208,22 @@ export function ThreatResponsePanel() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
+        <p className="text-xs text-slate-500">
+          Demo actions only update the dashboard state. They do not change your real firewall.
+        </p>
+        {message && <p className="text-sm text-slate-600">{message}</p>}
         <Button 
           className="w-full" 
           onClick={() => handleQuickResponse("BLOCK")}
-          disabled={responding}
+          disabled={busyAction !== null}
         >
-          {responding ? "Processing..." : "Block Active Threat"}
+          {busyAction === "BLOCK" ? "Processing..." : "Block Active Threat"}
         </Button>
         <Button 
           className="w-full" 
           variant="outline"
           onClick={() => handleQuickResponse("ALERT")}
-          disabled={responding}
+          disabled={busyAction !== null}
         >
           Send Alert
         </Button>
@@ -181,9 +231,25 @@ export function ThreatResponsePanel() {
           className="w-full" 
           variant="outline"
           onClick={() => handleQuickResponse("INVESTIGATE")}
-          disabled={responding}
+          disabled={busyAction !== null}
         >
           Open Investigation
+        </Button>
+        <Button
+          className="w-full"
+          variant="secondary"
+          onClick={() => handleGenerateDemo("random")}
+          disabled={busyAction !== null}
+        >
+          {busyAction === "demo-random" ? "Generating..." : "Generate Demo Threat"}
+        </Button>
+        <Button
+          className="w-full"
+          variant="outline"
+          onClick={() => handleGenerateDemo("all")}
+          disabled={busyAction !== null}
+        >
+          {busyAction === "demo-all" ? "Generating..." : "Generate Demo Threat Pack"}
         </Button>
       </CardContent>
     </Card>

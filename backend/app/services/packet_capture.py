@@ -3,11 +3,10 @@ Packet Capture Service
 Handles real-time packet capturing and processing
 """
 
-from scapy.all import sniff, IP, TCP, UDP, ICMP
+from scapy.all import sniff, IP, TCP, UDP, ICMP, DNS, DNSQR
 from typing import Dict, List, Any, Optional
 from collections import defaultdict
 from datetime import datetime
-import threading
 from queue import Queue
 
 class PacketCaptureService:
@@ -86,14 +85,17 @@ class PacketCaptureService:
     def _extract_packet_info(self, packet) -> Dict[str, Any]:
         """Extract relevant information from a packet"""
         packet_info = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": self._packet_timestamp(packet),
             "size_bytes": len(packet),
             "source_ip": None,
             "dest_ip": None,
             "protocol": "Unknown",
+            "application_protocol": None,
             "source_port": None,
             "dest_port": None,
-            "flags": []
+            "flags": [],
+            "dns_query": None,
+            "dns_query_type": None,
         }
         
         # IP layer
@@ -122,6 +124,12 @@ class PacketCaptureService:
         elif ICMP in packet:
             packet_info["protocol"] = "ICMP"
             packet_info["flags"] = [f"Type: {packet[ICMP].type}"]
+
+        if DNS in packet:
+            packet_info["application_protocol"] = "DNS"
+            dns_query, dns_query_type = self._extract_dns_query(packet)
+            packet_info["dns_query"] = dns_query
+            packet_info["dns_query_type"] = dns_query_type
         
         return packet_info
     
@@ -185,18 +193,7 @@ class PacketCaptureService:
     
     def _format_packets(self, scapy_packets) -> List[Dict[str, Any]]:
         """Convert Scapy packets to JSON-serializable format"""
-        return [
-            {
-                "timestamp": datetime.now().isoformat(),
-                "source_ip": pkt[IP].src if IP in pkt else None,
-                "dest_ip": pkt[IP].dst if IP in pkt else None,
-                "protocol": self._get_protocol_name(pkt[IP].proto) if IP in pkt else "Unknown",
-                "size_bytes": len(pkt),
-                "source_port": pkt[TCP].sport if TCP in pkt else (pkt[UDP].sport if UDP in pkt else None),
-                "dest_port": pkt[TCP].dport if TCP in pkt else (pkt[UDP].dport if UDP in pkt else None),
-            }
-            for pkt in scapy_packets
-        ]
+        return [self._extract_packet_info(pkt) for pkt in scapy_packets]
     
     @staticmethod
     def _get_protocol_name(protocol_number: int) -> str:
@@ -226,3 +223,28 @@ class PacketCaptureService:
         if flags & 0x20:  # URG
             flag_names.append("URG")
         return flag_names if flag_names else ["None"]
+
+    @staticmethod
+    def _packet_timestamp(packet) -> str:
+        """Convert the packet capture time into an ISO timestamp."""
+        packet_time = getattr(packet, "time", None)
+        if packet_time is None:
+            return datetime.now().isoformat()
+
+        try:
+            return datetime.fromtimestamp(float(packet_time)).isoformat()
+        except Exception:
+            return datetime.now().isoformat()
+
+    @staticmethod
+    def _extract_dns_query(packet) -> tuple[Optional[str], Optional[str]]:
+        """Extract a DNS query name and type when present."""
+        try:
+            if DNS in packet and packet[DNS].qd and DNSQR in packet:
+                query_name = packet[DNSQR].qname.decode(errors="ignore").rstrip(".")
+                query_type = str(packet[DNSQR].qtype)
+                return query_name, query_type
+        except Exception:
+            pass
+
+        return None, None

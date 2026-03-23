@@ -42,7 +42,10 @@ export default function DashboardPage() {
                 </div>
                 <ThreatDetectionPanel />
               </div>
-              <ThreatResponsePanel />
+              <div className="grid gap-4 lg:grid-cols-2">
+                <ThreatResponsePanel />
+                <AlertNotifications />
+              </div>
             </>
           )}
           {activeTab === "packets" && (
@@ -62,7 +65,10 @@ export default function DashboardPage() {
                 </div>
                 <ThreatDetectionPanel />
               </div>
-              <ThreatResponsePanel />
+              <div className="grid gap-4 lg:grid-cols-2">
+                <ThreatResponsePanel />
+                <AlertNotifications />
+              </div>
               <OSProtection />
             </>
           )}
