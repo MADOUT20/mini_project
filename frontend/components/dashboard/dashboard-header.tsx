@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Bell, User, AlertCircle } from "lucide-react"
+import { Bell, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { UserProfileModal } from "@/components/user-profile-modal"
 import Link from "next/link"
+import { getNotifications, getUsers, type Notification, type User as AppUser } from "@/lib/api"
 
 const tabLabels: Record<string, string> = {
   overview: "Dashboard Overview",
@@ -33,16 +34,15 @@ interface DashboardHeaderProps {
 
 export function DashboardHeader({ activeTab, onTabChange }: DashboardHeaderProps) {
   const [profileOpen, setProfileOpen] = useState(false)
-  const [userName, setUserName] = useState("Admin User")
-  const [archivedAlerts, setArchivedAlerts] = useState<any[]>([])
+  const [user, setUser] = useState<AppUser | null>(null)
+  const [archivedAlerts, setArchivedAlerts] = useState<Notification[]>([])
   const [showArchived, setShowArchived] = useState(false)
-  const [alerts, setAlerts] = useState<any[]>([])
+  const [alerts, setAlerts] = useState<Notification[]>([])
   const [loadingAlerts, setLoadingAlerts] = useState(true)
 
   useEffect(() => {
     const fetchAlerts = async () => {
       try {
-        const { getNotifications } = await import("@/lib/api")
         const data = await getNotifications()
         setAlerts(data.notifications || [])
         setLoadingAlerts(false)
@@ -52,7 +52,19 @@ export function DashboardHeader({ activeTab, onTabChange }: DashboardHeaderProps
       }
     }
 
+    const fetchUser = async () => {
+      try {
+        const data = await getUsers()
+        if (data.users && data.users.length > 0) {
+          setUser(data.users[0])
+        }
+      } catch (err) {
+        console.error("Failed to fetch user:", err)
+      }
+    }
+
     fetchAlerts()
+    fetchUser()
     const interval = setInterval(fetchAlerts, 3000)
     return () => clearInterval(interval)
   }, [])
@@ -145,7 +157,9 @@ export function DashboardHeader({ activeTab, onTabChange }: DashboardHeaderProps
                         >
                           {severity}
                         </Badge>
-                        <span className="text-xs text-muted-foreground">{alert.timestamp}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(alert.timestamp).toLocaleString()}
+                        </span>
                       </div>
                       <div className="space-y-1 text-sm">
                         <p className="font-medium text-foreground">{alert.title}</p>
@@ -173,8 +187,8 @@ export function DashboardHeader({ activeTab, onTabChange }: DashboardHeaderProps
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <div className="px-3 py-2">
-              <p className="text-sm font-medium text-foreground">{userName}</p>
-              <p className="text-xs text-muted-foreground">admin@netguard.io</p>
+              <p className="text-sm font-medium text-foreground">{user ? user.email : "Loading..."}</p>
+              <p className="text-xs text-muted-foreground">{user ? user.role : ""}</p>
             </div>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => setProfileOpen(true)}>
@@ -195,7 +209,7 @@ export function DashboardHeader({ activeTab, onTabChange }: DashboardHeaderProps
       <UserProfileModal 
         open={profileOpen} 
         onOpenChange={setProfileOpen}
-        onNameChange={setUserName}
+        user={user}
       />
     </header>
   )

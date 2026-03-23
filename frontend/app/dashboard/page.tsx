@@ -1,16 +1,31 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { healthCheck, type HealthCheckResponse } from "../../lib/api"
 import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { StatCards } from "@/components/dashboard/stat-cards"
 import { TrafficChartPanel, PacketInspectionPanel, TrafficAnalysisPanel } from "@/components/dashboard/traffic"
 import { ThreatDetectionPanel, ThreatResponsePanel, OSProtection } from "@/components/dashboard/threats"
-import { SettingsPanel, AdminPanel, ActionLogs, StatsOverview } from "@/components/dashboard/admin"
+import { SettingsPanel, AdminPanel, ActionLogs } from "@/components/dashboard/admin"
 import { AlertNotifications, NotificationArchive } from "@/components/dashboard/alerts"
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState("overview")
+  const [healthData, setHealthData] = useState<HealthCheckResponse | null>(null)
+
+  useEffect(() => {
+    const fetchHealthData = async () => {
+      try {
+        const data = await healthCheck()
+        setHealthData(data)
+      } catch (error) {
+        console.error("Failed to fetch health status:", error)
+      }
+    }
+
+    fetchHealthData()
+  }, [])
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -20,7 +35,7 @@ export default function DashboardPage() {
         <main className="flex-1 overflow-y-auto p-6 space-y-6">
           {activeTab === "overview" && (
             <>
-              <StatsOverview />
+              <StatCards healthData={healthData} />
               <div className="grid gap-4 lg:grid-cols-3">
                 <div className="lg:col-span-2">
                   <TrafficChartPanel />
@@ -32,7 +47,6 @@ export default function DashboardPage() {
           )}
           {activeTab === "packets" && (
             <>
-              <StatsOverview />
               <TrafficChartPanel />
               <PacketInspectionPanel />
             </>

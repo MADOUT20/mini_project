@@ -1,44 +1,100 @@
 "use client"
 
-import { Activity, ShieldAlert, Globe, Wifi } from "lucide-react"
+import { useEffect, useState } from "react"
+import { Activity, ShieldAlert, Server, Workflow } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
+import { getAdminDashboard, getTrafficSummary } from "@/lib/api"
 
-const stats = [
-  {
-    label: "Packets Captured",
-    value: "1,284,392",
-    change: "+12.5%",
-    changeType: "positive" as const,
-    icon: Activity,
-    description: "Last 24 hours",
-  },
-  {
-    label: "Threats Detected",
-    value: "47",
-    change: "-8.2%",
-    changeType: "positive" as const,
-    icon: ShieldAlert,
-    description: "Last 24 hours",
-  },
-  {
-    label: "Foreign Connections",
-    value: "3,891",
-    change: "+3.1%",
-    changeType: "neutral" as const,
-    icon: Globe,
-    description: "Active sessions",
-  },
-  {
-    label: "Network Uptime",
-    value: "99.97%",
-    change: "+0.02%",
-    changeType: "positive" as const,
-    icon: Wifi,
-    description: "30-day average",
-  },
-]
+interface HealthData {
+  status?: string
+  timestamp?: string
+}
 
-export function StatCards() {
+interface StatCardsProps {
+  healthData?: HealthData | null
+}
+
+function formatCount(value: number) {
+  return value.toLocaleString()
+}
+
+function formatTimestamp(timestamp?: string) {
+  if (!timestamp) {
+    return "Awaiting update"
+  }
+
+  return new Date(timestamp).toLocaleTimeString()
+}
+
+export function StatCards({ healthData }: StatCardsProps) {
+  const [overview, setOverview] = useState({
+    total_packets: 0,
+    total_threats: 0,
+    critical_threats: 0,
+    last_update: "",
+  })
+  const [connections, setConnections] = useState(0)
+
+  useEffect(() => {
+    const fetchOverview = async () => {
+      try {
+        const [dashboard, trafficSummary] = await Promise.all([
+          getAdminDashboard(),
+          getTrafficSummary(),
+        ])
+
+        setOverview({
+          total_packets: dashboard.total_packets || 0,
+          total_threats: dashboard.total_threats || 0,
+          critical_threats: dashboard.critical_threats || 0,
+          last_update: dashboard.last_update || "",
+        })
+        setConnections(trafficSummary.connections?.unique_connections || 0)
+      } catch (error) {
+        console.error("Failed to fetch overview stats:", error)
+      }
+    }
+
+    fetchOverview()
+    const interval = setInterval(fetchOverview, 5000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const stats = [
+    {
+      label: "Packets Captured",
+      value: formatCount(overview.total_packets),
+      change: formatTimestamp(overview.last_update),
+      changeType: "positive" as const,
+      icon: Activity,
+      description: "Last backend sync",
+    },
+    {
+      label: "Threats Detected",
+      value: formatCount(overview.total_threats),
+      change: `${overview.critical_threats} critical`,
+      changeType: overview.critical_threats > 0 ? ("negative" as const) : ("positive" as const),
+      icon: ShieldAlert,
+      description: "Active detections",
+    },
+    {
+      label: "Network Connections",
+      value: formatCount(connections),
+      change: "Live topology",
+      changeType: "neutral" as const,
+      icon: Workflow,
+      description: "Unique source-destination pairs",
+    },
+    {
+      label: "Backend Status",
+      value: healthData?.status === "healthy" ? "Healthy" : "Unhealthy",
+      change: formatTimestamp(healthData?.timestamp),
+      changeType: healthData?.status === "healthy" ? ("positive" as const) : ("negative" as const),
+      icon: Server,
+      description: "Last health check",
+    },
+  ]
+
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {stats.map((stat) => (
@@ -58,7 +114,9 @@ export function StatCards() {
                 className={`text-xs font-medium ${
                   stat.changeType === "positive"
                     ? "text-emerald-500"
-                    : "text-muted-foreground"
+                    : stat.changeType === "negative"
+                      ? "text-red-500"
+                      : "text-muted-foreground"
                 }`}
               >
                 {stat.change}

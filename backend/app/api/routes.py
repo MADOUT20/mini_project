@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+import os
 from app.services.packet_capture import PacketCaptureService
 from app.services.threat_detection import ThreatDetectionService
 from app.services.traffic_analysis import TrafficAnalysisService
@@ -41,10 +42,21 @@ class PacketData(BaseModel):
     port: int
     size: int
 
+class UserCreateRequest(BaseModel):
+    email: str
+    password: Optional[str] = None
+    role: str
+
+# In-memory user store for the dashboard admin panel
+users_store: List[Dict[str, str]] = [
+    {"id": "user_1", "email": "admin@chaosfaction.com", "role": "admin"},
+    {"id": "user_2", "email": "viewer@chaosfaction.com", "role": "viewer"},
+]
+
 # ===== TRAFFIC ROUTES =====
 traffic_router = APIRouter(prefix="/api/traffic", tags=["Traffic Analysis"])
 
-@traffic_router.get("/")
+@traffic_router.get("")
 async def get_traffic(time_range: str = Query("hour", description="Time range for analysis")):
     """Get network traffic statistics with real packet data"""
     try:
@@ -147,7 +159,7 @@ async def get_traffic_history(time_range: str = "hour", interval: str = "minute"
 # ===== THREATS ROUTES =====
 threats_router = APIRouter(prefix="/api/threats", tags=["Threat Detection"])
 
-@threats_router.get("/")
+@threats_router.get("")
 async def get_threats(
     status: str = Query("active", description="Filter by status"),
     severity: Optional[str] = Query(None, description="Filter by severity (LOW, MEDIUM, HIGH, CRITICAL)")
@@ -240,7 +252,7 @@ async def analyze_for_threats():
 # ===== PACKETS ROUTES =====
 packets_router = APIRouter(prefix="/api/packets", tags=["Packet Capture"])
 
-@packets_router.get("/")
+@packets_router.get("")
 async def get_packets(limit: int = 100, offset: int = 0):
     """Get captured packets"""
     try:
@@ -322,12 +334,18 @@ async def analyze_packet():
 
 @packets_router.post("/capture/start")
 async def start_capture(
+    interface: Optional[str] = Query(None, description="Network interface to capture from"),
     count: int = Query(100, description="Number of packets to capture"),
     timeout: int = Query(10, description="Timeout in seconds")
 ):
     """Start packet capture"""
     try:
-        packets = await packet_service.capture_packets(count=count, timeout=timeout)
+        capture_interface = interface or os.getenv("CAPTURE_INTERFACE")
+        packets = await packet_service.capture_packets(
+            interface=capture_interface,
+            count=count,
+            timeout=timeout
+        )
         
         if isinstance(packets, dict) and "error" in packets:
             raise HTTPException(status_code=500, detail=packets["error"])
@@ -335,6 +353,7 @@ async def start_capture(
         return {
             "capture_id": f"cap_{datetime.now().timestamp()}",
             "status": "started",
+            "interface": capture_interface or "default",
             "packets_captured": len(packets) if isinstance(packets, list) else 0,
             "count": count,
             "timeout": timeout,
@@ -377,7 +396,7 @@ async def admin_dashboard():
     try:
         packets = packet_service.packets
         stats = await packet_service.get_packet_statistics()
-        threats = threat_service.threats
+        threats = await threat_service.detect_threats(packets, stats) if packets else []
         
         threat_count = len(threats)
         critical_threats = len([t for t in threats if t.get("severity") == "CRITICAL"])
@@ -434,7 +453,9 @@ async def update_settings(
 async def get_threats_summary():
     """Get threat summary for admin"""
     try:
-        threats = threat_service.threats
+        packets = packet_service.packets
+        stats = await packet_service.get_packet_statistics()
+        threats = await threat_service.detect_threats(packets, stats) if packets else []
         
         threat_types = {}
         for threat in threats:
@@ -485,10 +506,13 @@ async def health_check():
 # ===== NOTIFICATIONS ROUTER (Placeholder) =====
 notifications_router = APIRouter(prefix="/api/notifications", tags=["Notifications"])
 
-@notifications_router.get("/")
+@notifications_router.get("")
 async def get_notifications():
     """Get recent notifications"""
-    threats = threat_service.threats[:10]
+    packets = packet_service.packets
+    stats = await packet_service.get_packet_statistics()
+    threats = await threat_service.detect_threats(packets, stats) if packets else []
+    recent_threats = threats[:10]
     
     return {
         "notifications": [
@@ -501,57 +525,60 @@ async def get_notifications():
                 "timestamp": t.get("timestamp"),
                 "read": False
             }
-            for t in threats
+            for t in recent_threats
         ],
-        "total": len(threats)
+        "total": len(recent_threats)
     }
+
+# ===== USERS ROUTES =====
+users_router = APIRouter(prefix="/api/users", tags=["Users"])
+
+@users_router.get("")
 async def get_users():
     """Get list of users"""
-    return {
-        "users": [
-            {"id": "user_1", "email": "admin@chaosfaction.com", "role": "admin"},
-            {"id": "user_2", "email": "viewer@chaosfaction.com", "role": "viewer"}
-        ]
-    }
+    return {"users": users_store}
 
-@admin_router.post("/users")
-async def create_user(email: str, password: str, role: str):
+@users_router.post("")
+async def create_user(user: UserCreateRequest):
     """Create new user"""
+    role = user.role.lower()
+
     if role not in ["admin", "viewer"]:
         raise HTTPException(status_code=400, detail="Invalid role")
-    
-    return {
-        "success": True,
-        "user_id": "user_new",
-        "email": email,
+
+    if any(existing_user["email"].lower() == user.email.lower() for existing_user in users_store):
+        raise HTTPException(status_code=409, detail="User already exists")
+
+    new_user = {
+        "id": f"user_{len(users_store) + 1}",
+        "email": user.email,
         "role": role
     }
+    users_store.append(new_user)
 
-@admin_router.delete("/users/{user_id}")
+    return new_user
+
+@users_router.delete("/{user_id}")
 async def delete_user(user_id: str):
     """Delete user"""
-    return {
-        "success": True,
-        "message": f"User {user_id} deleted"
-    }
+    for index, existing_user in enumerate(users_store):
+        if existing_user["id"] == user_id:
+            deleted_user = users_store.pop(index)
+            return {
+                "success": True,
+                "message": f"User {user_id} deleted",
+                "user": deleted_user
+            }
 
-# ===== NOTIFICATIONS ROUTES =====
-notifications_router = APIRouter(prefix="/api/notifications")
-
-@notifications_router.get("/")
-async def get_notifications(limit: int = 50):
-    """Get notifications"""
-    return {
-        "notifications": [
-            {"id": "notif_1", "type": "THREAT", "message": "High severity threat detected", "read": False},
-            {"id": "notif_2", "type": "SYSTEM", "message": "Backup completed", "read": True}
-        ]
-    }
+    raise HTTPException(status_code=404, detail="User not found")
 
 @notifications_router.post("/{notif_id}/read")
 async def mark_notification_read(notif_id: str):
     """Mark notification as read"""
-    return {"success": True, "notification_id": notif_id}
+    return {
+        "success": True,
+        "notification_id": notif_id
+    }
 
 @notifications_router.delete("/{notif_id}")
 async def delete_notification(notif_id: str):

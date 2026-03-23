@@ -16,59 +16,44 @@ project-root/
 ### Prerequisites
 - Node.js 18+ & pnpm
 - Python 3.11+
-- Docker (optional)
+- Docker
 
 ### Local Development
 
-**Option 1: Without Docker**
-
-**Frontend:**
+**With Docker (Recommended)**
 ```bash
-cd frontend
-pnpm install
-pnpm dev
-# http://localhost:3000
+docker-compose up --build
 ```
-
-**Backend (in another terminal):**
-```bash
-cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-# http://localhost:8000
-```
-
-**Option 2: With Docker**
-```bash
-docker-compose up
-```
+This will start both the frontend and backend services.
+- Frontend: http://localhost:3000
+- Backend: http://localhost:8000
 
 ### Environment Variables
 
-Copy `.env.example` to `.env.local` and update values:
+Copy `.env.example` to `.env.local` and update values if needed. The default values are set to work with the docker-compose setup.
 
 ```bash
 # Frontend
 NEXT_PUBLIC_API_URL=http://localhost:8000
+BACKEND_API_URL=http://localhost:8000
 
 # Backend
 BACKEND_PORT=8000
 ```
 
-## 📦 Deployment
+## 🖥️ VPS Deployment
 
-### Frontend (Vercel)
-- Already deployed at: https://chaosfaction.xyz/
-- Set `NEXT_PUBLIC_API_URL` environment variable in Vercel dashboard
+For a real Linux VPS deployment that supports packet capture, use the production compose file and guide in [DEPLOY_VPS.md](/Users/siddharthchillapwar/Desktop/network%20malware%20detection%20systerm/mini_project/DEPLOY_VPS.md).
 
-### Backend (Railway/Render/AWS)
-1. Push backend folder to a Git repo
-2. Connect to Railway/Render
-3. Set environment variables
-4. Deploy
+Key production files:
+
+- [docker-compose.vps.yml](/Users/siddharthchillapwar/Desktop/network%20malware%20detection%20systerm/mini_project/docker-compose.vps.yml)
+- [.env.vps.example](/Users/siddharthchillapwar/Desktop/network%20malware%20detection%20systerm/mini_project/.env.vps.example)
+- [chaosfaction.xyz.conf](/Users/siddharthchillapwar/Desktop/network%20malware%20detection%20systerm/mini_project/deploy/nginx/chaosfaction.xyz.conf)
 
 ## 🔌 API Endpoints
 
+- `GET /health` - Health check
 - `GET /api/traffic` - Traffic statistics
 - `GET /api/threats` - Threat detection data
 - `GET /api/packets` - Packet inspection data
@@ -94,6 +79,7 @@ const fetchTraffic = async () => {
 - React 19
 - Tailwind CSS
 - Shadcn/ui
+- Axios
 
 **Backend:**
 - FastAPI

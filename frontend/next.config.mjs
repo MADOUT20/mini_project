@@ -1,3 +1,8 @@
+const backendApiUrl =
+  process.env.BACKEND_API_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:8000"
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Performance & Build Optimization
@@ -30,14 +35,16 @@ const nextConfig = {
   
   // Rewrite API calls
   async rewrites() {
-    return {
-      beforeFiles: [
-        {
-          source: '/api/:path*',
-          destination: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/:path*`,
-        },
-      ],
-    }
+    return [
+      {
+        source: "/api/:path*",
+        destination: `${backendApiUrl}/api/:path*`,
+      },
+      {
+        source: "/health",
+        destination: `${backendApiUrl}/health`,
+      },
+    ]
   },
 }
 

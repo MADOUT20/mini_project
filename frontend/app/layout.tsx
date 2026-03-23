@@ -1,12 +1,8 @@
 import type { Metadata } from 'next'
-import { Inter, JetBrains_Mono } from 'next/font/google'
 import { ThemeProvider } from '@/components/theme-provider'
 import { KeyboardShortcutsHandler } from '@/components/keyboard-shortcuts-handler'
 
 import './globals.css'
-
-const _inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
-const _jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-jetbrains-mono' })
 
 export const metadata: Metadata = {
   title: 'NetGuard - Network Malware Detection System',
@@ -20,7 +16,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${_inter.variable} ${_jetbrainsMono.variable} font-sans antialiased`} suppressHydrationWarning>
+      <body className="font-sans antialiased" suppressHydrationWarning>
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"

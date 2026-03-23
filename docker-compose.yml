@@ -24,7 +24,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://backend:8000
+      - BACKEND_API_URL=http://backend:8000
     depends_on:
       - backend
     command: npm run dev

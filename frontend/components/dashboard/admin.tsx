@@ -8,7 +8,15 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Settings, Users, BarChart3, AlertTriangle } from "lucide-react"
-import { getAdminDashboard, getAdminSettings, updateAdminSettings } from "@/lib/api"
+import {
+  createUser,
+  deleteUser,
+  getAdminDashboard,
+  getAdminSettings,
+  getUsers,
+  type User,
+  updateAdminSettings,
+} from "@/lib/api"
 
 export function SettingsPanel() {
   const [settings, setSettings] = useState<any>({})
@@ -91,20 +99,117 @@ export function SettingsPanel() {
 }
 
 export function AdminPanel() {
+  const [users, setUsers] = useState<User[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+  const [newUser, setNewUser] = useState({ email: "", role: "viewer" })
+
+  const fetchUsers = async () => {
+    try {
+      setLoading(true)
+      const data = await getUsers()
+      setUsers(data.users)
+      setError("")
+      setLoading(false)
+    } catch (err) {
+      setError("Failed to load users")
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchUsers()
+  }, [])
+
+  const handleCreateUser = async () => {
+    if (!newUser.email.trim()) {
+      alert("Please enter an email address")
+      return
+    }
+
+    try {
+      await createUser({ email: newUser.email.trim(), role: newUser.role as User["role"] })
+      setNewUser({ email: "", role: "viewer" })
+      fetchUsers()
+      alert("User created successfully!")
+    } catch (err) {
+      alert("Failed to create user")
+    }
+  }
+
+  const handleDeleteUser = async (userId: string) => {
+    if (confirm("Are you sure you want to delete this user?")) {
+      try {
+        await deleteUser(userId)
+        fetchUsers()
+        alert("User deleted successfully!")
+      } catch (err) {
+        alert("Failed to delete user")
+      }
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Users className="w-5 h-5" />
-          Admin Panel
+          Admin Panel - User Management
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="p-2 bg-slate-50 rounded">
-          <p className="text-sm font-medium">System Status: Operational</p>
-          <p className="text-xs text-slate-500">All services running normally</p>
+      <CardContent className="space-y-4">
+        {error && <div className="text-red-500 text-sm">{error}</div>}
+        
+        {/* User List */}
+        <div className="border rounded-lg overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                <th scope="col" className="relative px-6 py-3">
+                  <span className="sr-only">Delete</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {loading ? (
+                <tr><td colSpan={3} className="text-center py-4">Loading users...</td></tr>
+              ) : (
+                users.map((user) => (
+                  <tr key={user.id}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{user.email}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.role}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <Button variant="destructive" size="sm" onClick={() => handleDeleteUser(user.id)}>Delete</Button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
-        <Button variant="outline" className="w-full">View Logs</Button>
+
+        {/* Create User Form */}
+        <div className="border-t pt-4 space-y-3">
+          <h4 className="font-medium">Create New User</h4>
+          <input
+            type="email"
+            placeholder="Email"
+            value={newUser.email}
+            onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+            className="w-full mt-1 px-3 py-2 border rounded"
+          />
+          <select
+            value={newUser.role}
+            onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+            className="w-full mt-1 px-3 py-2 border rounded"
+          >
+            <option value="viewer">Viewer</option>
+            <option value="admin">Admin</option>
+          </select>
+          <Button onClick={handleCreateUser} className="w-full mt-2">Create User</Button>
+        </div>
       </CardContent>
     </Card>
   )

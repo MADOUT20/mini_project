@@ -1,417 +1,346 @@
 // API Utility Functions for ChaosFaction Backend
 
-// @ts-ignore
-const API_URL = process?.env?.NEXT_PUBLIC_API_URL || "http://localhost:8000"
-
-// ===== Type Definitions =====
+const DEFAULT_HEADERS = {
+  "Content-Type": "application/json",
+}
 
 export interface TrafficStats {
-  total_packets: number;
-  total_bytes: number;
-  average_packet_size: number;
-  packets_per_second: number;
-  timestamp: string;
+  total_packets: number
+  total_bytes: number
+  average_packet_size: number
+  packets_per_second: number
+  time_range?: string
+  timestamp?: string
+}
+
+export interface ProtocolTraffic {
+  count: number
+  bytes: number
+  percentage: number
+}
+
+export interface TrafficProtocolResponse {
+  protocols: Record<string, ProtocolTraffic>
+  total_packets: number
+  total_bytes: number
+  timestamp: string
+}
+
+export interface PacketStatistics {
+  total_packets: number
+  total_bytes: number
+  average_packet_size: number
+  protocols: Record<string, number>
+  top_ports: Record<string, number>
+  stored_packets: number
 }
 
 export interface Threat {
-  id: string;
-  type: string;
-  source_ip: string;
-  severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-  threat_score: number;
-  description: string;
-  timestamp: string;
-  status: string;
+  id: string
+  type: string
+  source_ip: string
+  severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
+  threat_score: number
+  description: string
+  timestamp: string
+  status: string
 }
 
 export interface Packet {
-  timestamp: string;
-  source_ip: string;
-  dest_ip: string;
-  protocol: string;
-  source_port?: number;
-  dest_port?: number;
-  size_bytes: number;
-  flags?: string[];
+  timestamp: string
+  source_ip: string | null
+  dest_ip: string | null
+  protocol: string
+  source_port?: number | null
+  dest_port?: number | null
+  size_bytes: number
+  flags?: string[]
 }
 
 export interface Notification {
-  id: string;
-  type: string;
-  title: string;
-  message: string;
-  severity: string;
-  timestamp: string;
-  read: boolean;
+  id: string
+  type: string
+  title: string
+  message: string
+  severity: string
+  timestamp: string
+  read: boolean
 }
 
-// ===== Error Handling =====
+export interface User {
+  id: string
+  email: string
+  role: "admin" | "viewer"
+}
+
+export interface AdminDashboard {
+  total_packets: number
+  total_threats: number
+  critical_threats: number
+  system_health: string
+  uptime_percent: number
+  packet_stats: PacketStatistics
+  last_update: string
+}
+
+export interface TrafficConnectionsSummary {
+  unique_sources: number
+  unique_destinations: number
+  unique_connections: number
+  most_active: Array<{
+    connection: string
+    packets: number
+    bytes: number
+  }>
+  timestamp: string
+}
+
+export interface AdminTrafficSummary {
+  summary: TrafficStats
+  connections: TrafficConnectionsSummary
+  timestamp: string
+}
+
+export interface AdminSettings {
+  capture_enabled: boolean
+  anomaly_detection_enabled: boolean
+  alert_level: string
+  auto_block: boolean
+  backup_enabled: boolean
+  pps_threshold: number
+  port_scan_threshold: number
+}
+
+export interface HealthCheckResponse {
+  status: string
+  services: Record<string, string>
+  timestamp: string
+}
 
 class APIError extends Error {
-  constructor(public status: number, message: string) {
-    super(message);
-    this.name = "APIError";
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message)
+    this.name = "APIError"
   }
 }
 
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: "Unknown error" }));
-    throw new APIError(response.status, error.detail || "API Error");
+    const error = await response
+      .json()
+      .catch(() => ({ detail: "Unknown error" }))
+    throw new APIError(response.status, error.detail || "API Error")
   }
-  return response.json();
+
+  if (response.status === 204) {
+    return undefined as T
+  }
+
+  return response.json()
+}
+
+function buildUrl(path: string, params?: Record<string, string | number | undefined>) {
+  const searchParams = new URLSearchParams()
+
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== "") {
+        searchParams.append(key, String(value))
+      }
+    })
+  }
+
+  const query = searchParams.toString()
+  return query ? `${path}?${query}` : path
+}
+
+async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(path, {
+    cache: "no-store",
+    ...init,
+    headers: {
+      ...DEFAULT_HEADERS,
+      ...(init.headers || {}),
+    },
+  })
+
+  return handleResponse<T>(response)
 }
 
 // ===== TRAFFIC ENDPOINTS =====
 
 export async function getTrafficStats(): Promise<TrafficStats> {
-  try {
-    const response = await fetch(`${API_URL}/api/traffic/`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    });
-    const data = await handleResponse<any>(response);
-    return data.summary || data;
-  } catch (error) {
-    console.error("Failed to fetch traffic stats:", error);
-    throw error;
-  }
+  const data = await apiRequest<{ summary?: TrafficStats } & TrafficStats>("/api/traffic")
+  return data.summary || data
 }
 
-export async function getTrafficByProtocol() {
-  try {
-    const response = await fetch(`${API_URL}/api/traffic/by-protocol`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
-  } catch (error) {
-    console.error("Failed to fetch protocol stats:", error);
-    throw error;
-  }
+export async function getTrafficByProtocol(): Promise<TrafficProtocolResponse> {
+  return apiRequest<TrafficProtocolResponse>("/api/traffic/by-protocol")
 }
 
 export async function getTrafficByPort() {
-  try {
-    const response = await fetch(`${API_URL}/api/traffic/by-port`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
-  } catch (error) {
-    console.error("Failed to fetch port stats:", error);
-    throw error;
-  }
+  return apiRequest("/api/traffic/by-port")
 }
 
 export async function getTrafficByApplication() {
-  try {
-    const response = await fetch(`${API_URL}/api/traffic/by-application`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
-  } catch (error) {
-    console.error("Failed to fetch application stats:", error);
-    throw error;
-  }
+  return apiRequest("/api/traffic/by-application")
 }
 
 export async function getConnectionPatterns() {
-  try {
-    const response = await fetch(`${API_URL}/api/traffic/connections`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
-  } catch (error) {
-    console.error("Failed to fetch connection patterns:", error);
-    throw error;
-  }
+  return apiRequest("/api/traffic/connections")
 }
 
 export async function getBandwidthPrediction() {
-  try {
-    const response = await fetch(`${API_URL}/api/traffic/bandwidth-prediction`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
-  } catch (error) {
-    console.error("Failed to fetch bandwidth prediction:", error);
-    throw error;
-  }
+  return apiRequest("/api/traffic/bandwidth-prediction")
 }
 
-export async function getTrafficHistory(timeRange: string = "hour") {
-  try {
-    const response = await fetch(`${API_URL}/api/traffic/history?time_range=${timeRange}`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
-  } catch (error) {
-    console.error("Failed to fetch traffic history:", error);
-    throw error;
-  }
+export async function getTrafficHistory(timeRange = "hour") {
+  return apiRequest(buildUrl("/api/traffic/history", { time_range: timeRange }))
 }
 
 // ===== THREAT ENDPOINTS =====
 
-export async function getThreats(status: string = "active", severity?: string): Promise<{ threats: Threat[] }> {
-  try {
-    let url = `${API_URL}/api/threats/?status=${status}`;
-    if (severity) url += `&severity=${severity}`;
-    
-    const response = await fetch(url, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
-  } catch (error) {
-    console.error("Failed to fetch threats:", error);
-    throw error;
-  }
+export async function getThreats(
+  status = "active",
+  severity?: string,
+): Promise<{ threats: Threat[] }> {
+  return apiRequest<{ threats: Threat[] }>(
+    buildUrl("/api/threats", { status, severity }),
+  )
 }
 
 export async function analyzeThreatsFull() {
-  try {
-    const response = await fetch(`${API_URL}/api/threats/analyze`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
-  } catch (error) {
-    console.error("Failed to analyze threats:", error);
-    throw error;
-  }
+  return apiRequest("/api/threats/analyze", {
+    method: "POST",
+  })
 }
 
 export async function getThreatIntelligence(threatId: string) {
-  try {
-    const response = await fetch(`${API_URL}/api/threats/${threatId}/intelligence`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
-  } catch (error) {
-    console.error("Failed to fetch threat intelligence:", error);
-    throw error;
-  }
+  return apiRequest(`/api/threats/${encodeURIComponent(threatId)}/intelligence`)
 }
 
 export async function respondToThreat(threatId: string, action: string) {
-  try {
-    const response = await fetch(
-      `${API_URL}/api/threats/${threatId}/respond?action=${action}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      }
-    );
-    return handleResponse(response);
-  } catch (error) {
-    console.error("Failed to respond to threat:", error);
-    throw error;
-  }
+  return apiRequest(
+    buildUrl(`/api/threats/${encodeURIComponent(threatId)}/respond`, { action }),
+    {
+      method: "POST",
+    },
+  )
 }
 
 // ===== PACKET ENDPOINTS =====
 
-export async function getPackets(limit: number = 100, offset: number = 0): Promise<{ packets: Packet[] }> {
-  try {
-    const response = await fetch(`${API_URL}/api/packets/?limit=${limit}&offset=${offset}`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
-  } catch (error) {
-    console.error("Failed to fetch packets:", error);
-    throw error;
-  }
+export async function getPackets(
+  limit = 100,
+  offset = 0,
+): Promise<{ packets: Packet[] }> {
+  return apiRequest<{ packets: Packet[] }>(
+    buildUrl("/api/packets", { limit, offset }),
+  )
 }
 
 export async function filterPackets(filters: {
-  source_ip?: string;
-  dest_ip?: string;
-  protocol?: string;
-  port?: number;
+  source_ip?: string
+  dest_ip?: string
+  protocol?: string
+  port?: number
 }) {
-  try {
-    const params = new URLSearchParams();
-    if (filters.source_ip) params.append("source_ip", filters.source_ip);
-    if (filters.dest_ip) params.append("dest_ip", filters.dest_ip);
-    if (filters.protocol) params.append("protocol", filters.protocol);
-    if (filters.port) params.append("port", filters.port.toString());
-
-    const response = await fetch(`${API_URL}/api/packets/filter?${params}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
-  } catch (error) {
-    console.error("Failed to filter packets:", error);
-    throw error;
-  }
+  return apiRequest(buildUrl("/api/packets/filter", filters), {
+    method: "POST",
+  })
 }
 
 export async function analyzePackets() {
-  try {
-    const response = await fetch(`${API_URL}/api/packets/analyze`, {
+  return apiRequest("/api/packets/analyze", {
+    method: "POST",
+  })
+}
+
+export async function getPacketStatistics(): Promise<PacketStatistics> {
+  return apiRequest<PacketStatistics>("/api/packets/statistics")
+}
+
+export async function startPacketCapture(count = 100, timeout = 10) {
+  return apiRequest(
+    buildUrl("/api/packets/capture/start", { count, timeout }),
+    {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
-  } catch (error) {
-    console.error("Failed to analyze packets:", error);
-    throw error;
-  }
-}
-
-export async function getPacketStatistics() {
-  try {
-    const response = await fetch(`${API_URL}/api/packets/statistics`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
-  } catch (error) {
-    console.error("Failed to get packet statistics:", error);
-    throw error;
-  }
-}
-
-export async function startPacketCapture(count: number = 100, timeout: number = 10) {
-  try {
-    const response = await fetch(
-      `${API_URL}/api/packets/capture/start?count=${count}&timeout=${timeout}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      }
-    );
-    return handleResponse(response);
-  } catch (error) {
-    console.error("Failed to start packet capture:", error);
-    throw error;
-  }
+    },
+  )
 }
 
 export async function stopPacketCapture() {
-  try {
-    const response = await fetch(`${API_URL}/api/packets/capture/stop`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
-  } catch (error) {
-    console.error("Failed to stop packet capture:", error);
-    throw error;
-  }
+  return apiRequest("/api/packets/capture/stop", {
+    method: "POST",
+  })
 }
 
 // ===== ADMIN ENDPOINTS =====
 
-export async function getAdminDashboard() {
-  try {
-    const response = await fetch(`${API_URL}/api/admin/dashboard`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
-  } catch (error) {
-    console.error("Failed to fetch admin dashboard:", error);
-    throw error;
-  }
+export async function getAdminDashboard(): Promise<AdminDashboard> {
+  return apiRequest<AdminDashboard>("/api/admin/dashboard")
 }
 
-export async function getAdminSettings() {
-  try {
-    const response = await fetch(`${API_URL}/api/admin/settings`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
-  } catch (error) {
-    console.error("Failed to fetch admin settings:", error);
-    throw error;
-  }
+export async function getAdminSettings(): Promise<AdminSettings> {
+  return apiRequest<AdminSettings>("/api/admin/settings")
 }
 
 export async function updateAdminSettings(settings: {
-  pps_threshold?: number;
-  port_scan_threshold?: number;
-  alert_level?: string;
+  pps_threshold?: number
+  port_scan_threshold?: number
+  alert_level?: string
 }) {
-  try {
-    const params = new URLSearchParams();
-    if (settings.pps_threshold) params.append("pps_threshold", settings.pps_threshold.toString());
-    if (settings.port_scan_threshold) params.append("port_scan_threshold", settings.port_scan_threshold.toString());
-    if (settings.alert_level) params.append("alert_level", settings.alert_level);
+  return apiRequest(buildUrl("/api/admin/settings", settings), {
+    method: "PUT",
+  })
+}
 
-    const response = await fetch(`${API_URL}/api/admin/settings?${params}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
-  } catch (error) {
-    console.error("Failed to update admin settings:", error);
-    throw error;
-  }
+export async function getThreatsSummary() {
+  return apiRequest("/api/admin/threats-summary")
 }
 
 export async function getThreatssSummary() {
-  try {
-    const response = await fetch(`${API_URL}/api/admin/threats-summary`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
-  } catch (error) {
-    console.error("Failed to fetch threats summary:", error);
-    throw error;
-  }
+  return getThreatsSummary()
 }
 
-export async function getTrafficSummary() {
-  try {
-    const response = await fetch(`${API_URL}/api/admin/traffic-summary`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
-  } catch (error) {
-    console.error("Failed to fetch traffic summary:", error);
-    throw error;
-  }
+export async function getTrafficSummary(): Promise<AdminTrafficSummary> {
+  return apiRequest<AdminTrafficSummary>("/api/admin/traffic-summary")
 }
 
 // ===== NOTIFICATIONS ENDPOINTS =====
 
 export async function getNotifications(): Promise<{ notifications: Notification[] }> {
-  try {
-    const response = await fetch(`${API_URL}/api/notifications/`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
-  } catch (error) {
-    console.error("Failed to fetch notifications:", error);
-    throw error;
-  }
+  return apiRequest<{ notifications: Notification[] }>("/api/notifications")
+}
+
+// ===== USERS ENDPOINTS =====
+
+export async function getUsers(): Promise<{ users: User[] }> {
+  return apiRequest<{ users: User[] }>("/api/users")
+}
+
+export async function createUser(userData: {
+  email: string
+  password?: string
+  role: User["role"]
+}): Promise<User> {
+  return apiRequest<User>("/api/users", {
+    method: "POST",
+    body: JSON.stringify(userData),
+  })
+}
+
+export async function deleteUser(userId: string) {
+  return apiRequest(`/api/users/${encodeURIComponent(userId)}`, {
+    method: "DELETE",
+  })
 }
 
 // ===== HEALTH CHECK =====
 
-export async function healthCheck() {
-  try {
-    const response = await fetch(`${API_URL}/health`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    });
-    return handleResponse(response);
-  } catch (error) {
-    console.error("Health check failed:", error);
-    throw error;
-  }
+export async function healthCheck(): Promise<HealthCheckResponse> {
+  return apiRequest<HealthCheckResponse>("/health")
 }

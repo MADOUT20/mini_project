@@ -1,44 +1,67 @@
 "use client"
 
-// ===== Consolidated Traffic & Packets =====
-
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useEffect, useState } from "react"
+import { Activity, Network, Radar, RefreshCw } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { Activity, Network, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { 
-  getTrafficByProtocol, 
-  getPackets, 
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
   getPacketStatistics,
+  getPackets,
+  getTrafficByProtocol,
+  getTrafficStats,
   startPacketCapture,
-  Packet 
+  type Packet,
+  type PacketStatistics,
+  type TrafficProtocolResponse,
+  type TrafficStats,
 } from "@/lib/api"
 
+function formatBytes(bytes: number) {
+  if (bytes >= 1024 * 1024) {
+    return `${(bytes / 1024 / 1024).toFixed(2)} MB`
+  }
+
+  if (bytes >= 1024) {
+    return `${(bytes / 1024).toFixed(2)} KB`
+  }
+
+  return `${bytes} B`
+}
+
+function getTopProtocol(protocols: TrafficProtocolResponse["protocols"]) {
+  const sortedProtocols = Object.entries(protocols || {}).sort(
+    ([, first], [, second]) => second.count - first.count,
+  )
+
+  return sortedProtocols[0] || null
+}
+
 export function TrafficPanel() {
-  const [trafficData, setTrafficData] = useState<any[]>([])
+  const [trafficData, setTrafficData] = useState<
+    Array<{ protocol: string; packets: number; bytes: string; percentage: number }>
+  >([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchTraffic = async () => {
       try {
-        const data: any = await getTrafficByProtocol()
-        if (data.protocols) {
-          const protocols = Object.entries(data.protocols).map(([name, info]: any) => ({
-            protocol: name,
-            packets: info.count,
-            bytes: (info.bytes / 1024 / 1024).toFixed(2) + " MB",
-            percentage: info.percentage
-          }))
-          setTrafficData(protocols)
-        }
-        setLoading(false)
-      } catch (err) {
-        console.error("Failed to fetch traffic:", err)
+        const data = await getTrafficByProtocol()
+        const protocols = Object.entries(data.protocols || {}).map(([name, info]) => ({
+          protocol: name,
+          packets: info.count,
+          bytes: formatBytes(info.bytes),
+          percentage: info.percentage,
+        }))
+
+        setTrafficData(protocols)
+      } catch (error) {
+        console.error("Failed to fetch traffic:", error)
+      } finally {
         setLoading(false)
       }
     }
-    
+
     fetchTraffic()
     const interval = setInterval(fetchTraffic, 5000)
     return () => clearInterval(interval)
@@ -48,7 +71,7 @@ export function TrafficPanel() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Network className="w-5 h-5" />
+          <Network className="h-5 w-5" />
           Traffic by Protocol
         </CardTitle>
       </CardHeader>
@@ -59,12 +82,17 @@ export function TrafficPanel() {
           ) : trafficData.length === 0 ? (
             <p className="text-sm text-slate-500">No traffic data available</p>
           ) : (
-            trafficData.map((t: any) => (
-              <div key={t.protocol} className="flex justify-between items-center p-2 bg-slate-50 rounded">
-                <span className="font-medium">{t.protocol}</span>
+            trafficData.map((traffic) => (
+              <div
+                key={traffic.protocol}
+                className="flex items-center justify-between rounded bg-slate-50 p-2"
+              >
+                <span className="font-medium">{traffic.protocol}</span>
                 <div className="text-right">
-                  <p className="text-sm">{t.packets.toLocaleString()} packets</p>
-                  <p className="text-xs text-slate-500">{t.bytes} ({t.percentage}%)</p>
+                  <p className="text-sm">{traffic.packets.toLocaleString()} packets</p>
+                  <p className="text-xs text-slate-500">
+                    {traffic.bytes} ({traffic.percentage}%)
+                  </p>
                 </div>
               </div>
             ))
@@ -76,62 +104,108 @@ export function TrafficPanel() {
 }
 
 export function TrafficChartPanel() {
-  const [stats, setStats] = useState<any>({})
+  const [summary, setSummary] = useState<TrafficStats | null>(null)
+  const [stats, setStats] = useState<PacketStatistics | null>(null)
   const [loading, setLoading] = useState(true)
+  const [capturing, setCapturing] = useState(false)
+  const [error, setError] = useState("")
+
+  const fetchStats = async () => {
+    try {
+      const [trafficSummary, packetStats] = await Promise.all([
+        getTrafficStats(),
+        getPacketStatistics(),
+      ])
+
+      setSummary(trafficSummary)
+      setStats(packetStats)
+      setError("")
+    } catch (err) {
+      console.error("Failed to fetch stats:", err)
+      setError("Unable to reach the backend right now.")
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const data: any = await getPacketStatistics()
-        setStats(data)
-        setLoading(false)
-      } catch (err) {
-        console.error("Failed to fetch stats:", err)
-        setLoading(false)
-      }
-    }
-    
     fetchStats()
     const interval = setInterval(fetchStats, 5000)
     return () => clearInterval(interval)
   }, [])
 
+  const handleCapture = async () => {
+    setCapturing(true)
+    setError("")
+
+    try {
+      await startPacketCapture(50, 5)
+      await fetchStats()
+    } catch (err) {
+      console.error("Packet capture failed:", err)
+      setError("Packet capture failed. Check backend permissions and try again.")
+    } finally {
+      setCapturing(false)
+    }
+  }
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2">
-          <Activity className="w-5 h-5" />
+          <Activity className="h-5 w-5" />
           Network Activity
         </CardTitle>
-        <Button size="sm" variant="ghost" onClick={() => window.location.reload()}>
-          <RefreshCw className="w-4 h-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="secondary" onClick={handleCapture} disabled={capturing}>
+            {capturing ? "Capturing..." : "Capture 50"}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={fetchStats}>
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {loading ? (
-          <div className="h-48 bg-gradient-to-r from-blue-50 to-blue-100 rounded flex items-center justify-center">
+          <div className="flex h-48 items-center justify-center rounded bg-gradient-to-r from-blue-50 to-blue-100">
             <p className="text-slate-500">Loading network stats...</p>
           </div>
         ) : (
           <div className="space-y-4">
+            {error && (
+              <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {error}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
-              <div className="p-3 bg-blue-50 rounded">
+              <div className="rounded bg-blue-50 p-3">
                 <p className="text-sm text-slate-600">Total Packets</p>
-                <p className="text-2xl font-bold text-blue-600">{(stats.total_packets || 0).toLocaleString()}</p>
+                <p className="text-2xl font-bold text-blue-600">
+                  {(stats?.total_packets || 0).toLocaleString()}
+                </p>
               </div>
-              <div className="p-3 bg-green-50 rounded">
+              <div className="rounded bg-green-50 p-3">
                 <p className="text-sm text-slate-600">Total Bytes</p>
-                <p className="text-2xl font-bold text-green-600">{((stats.total_bytes || 0) / 1024 / 1024).toFixed(2)} MB</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {formatBytes(stats?.total_bytes || 0)}
+                </p>
               </div>
-              <div className="p-3 bg-purple-50 rounded">
+              <div className="rounded bg-purple-50 p-3">
                 <p className="text-sm text-slate-600">Avg Packet Size</p>
-                <p className="text-2xl font-bold text-purple-600">{(stats.average_packet_size || 0).toFixed(0)} B</p>
+                <p className="text-2xl font-bold text-purple-600">
+                  {(summary?.average_packet_size || stats?.average_packet_size || 0).toFixed(0)} B
+                </p>
               </div>
-              <div className="p-3 bg-orange-50 rounded">
+              <div className="rounded bg-orange-50 p-3">
                 <p className="text-sm text-slate-600">Packets/sec</p>
-                <p className="text-2xl font-bold text-orange-600">{(stats.total_packets || 0).toLocaleString()}</p>
+                <p className="text-2xl font-bold text-orange-600">
+                  {(summary?.packets_per_second || 0).toLocaleString()}
+                </p>
               </div>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Stored packets: {(stats?.stored_packets || 0).toLocaleString()}
+            </p>
           </div>
         )}
       </CardContent>
@@ -148,13 +222,13 @@ export function PacketInspectionPanel() {
       try {
         const data = await getPackets(20)
         setPackets(data.packets || [])
-        setLoading(false)
       } catch (err) {
         console.error("Failed to fetch packets:", err)
+      } finally {
         setLoading(false)
       }
     }
-    
+
     fetchPackets()
     const interval = setInterval(fetchPackets, 5000)
     return () => clearInterval(interval)
@@ -166,24 +240,31 @@ export function PacketInspectionPanel() {
         <CardTitle>Recent Packets</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-2 max-h-96 overflow-y-auto">
+        <div className="max-h-96 space-y-2 overflow-y-auto">
           {loading ? (
             <p className="text-sm text-slate-500">Loading packets...</p>
           ) : packets.length === 0 ? (
-            <p className="text-sm text-slate-500">No packets captured yet. Start packet capture to see data.</p>
+            <p className="text-sm text-slate-500">
+              No packets captured yet. Use &quot;Capture 50&quot; to pull live traffic from the backend.
+            </p>
           ) : (
-            packets.slice(0, 10).map((p, i) => (
-              <div key={i} className="text-xs p-2 bg-slate-50 rounded border border-slate-200">
-                <div className="flex justify-between items-start gap-2">
+            packets.slice(0, 10).map((packet, index) => (
+              <div
+                key={`${packet.timestamp}-${index}`}
+                className="rounded border border-slate-200 bg-slate-50 p-2 text-xs"
+              >
+                <div className="flex items-start justify-between gap-2">
                   <div>
-                    <p className="font-medium">{p.source_ip} → {p.dest_ip}</p>
-                    <p className="text-slate-600">{p.protocol}</p>
+                    <p className="font-medium">
+                      {packet.source_ip || "Unknown"} → {packet.dest_ip || "Unknown"}
+                    </p>
+                    <p className="text-slate-600">{packet.protocol}</p>
                   </div>
-                  <Badge variant="outline">{p.size_bytes} B</Badge>
+                  <Badge variant="outline">{packet.size_bytes} B</Badge>
                 </div>
-                {(p.source_port || p.dest_port) && (
-                  <p className="text-slate-500 mt-1">
-                    Ports: {p.source_port}:{p.dest_port}
+                {(packet.source_port || packet.dest_port) && (
+                  <p className="mt-1 text-slate-500">
+                    Ports: {packet.source_port || "-"}:{packet.dest_port || "-"}
                   </p>
                 )}
               </div>
@@ -196,25 +277,38 @@ export function PacketInspectionPanel() {
 }
 
 export function TrafficAnalysisPanel() {
-  const [analysis, setAnalysis] = useState<any>({})
+  const [analysis, setAnalysis] = useState({
+    packets_per_second: 0,
+    average_packet_size: 0,
+    stored_packets: 0,
+    top_protocol: "N/A",
+  })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchAnalysis = async () => {
       try {
-        const stats: any = await getPacketStatistics()
+        const [summary, stats, protocolData] = await Promise.all([
+          getTrafficStats(),
+          getPacketStatistics(),
+          getTrafficByProtocol(),
+        ])
+
+        const topProtocol = getTopProtocol(protocolData.protocols)
+
         setAnalysis({
-          peak_pps: stats.total_packets || 0,
-          top_protocol: Object.keys(stats.protocols?.[0] || {})?.[0] || "TCP",
-          avg_size: stats.average_packet_size || 0,
-          stored_packets: stats.stored_packets || 0
+          packets_per_second: summary.packets_per_second || 0,
+          average_packet_size: summary.average_packet_size || stats.average_packet_size || 0,
+          stored_packets: stats.stored_packets || 0,
+          top_protocol: topProtocol?.[0] || "N/A",
         })
-        setLoading(false)
       } catch (err) {
+        console.error("Failed to fetch traffic analysis:", err)
+      } finally {
         setLoading(false)
       }
     }
-    
+
     fetchAnalysis()
     const interval = setInterval(fetchAnalysis, 5000)
     return () => clearInterval(interval)
@@ -223,17 +317,34 @@ export function TrafficAnalysisPanel() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Traffic Analysis</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <Radar className="h-5 w-5" />
+          Traffic Analysis
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
         {loading ? (
           <p className="text-sm text-slate-500">Loading analysis...</p>
         ) : (
           <>
-            <p className="text-sm">Peak Packets/sec: <Badge>{analysis.peak_pps?.toLocaleString()}</Badge></p>
-            <p className="text-sm">Avg Packet Size: <Badge>{analysis.avg_size?.toFixed(0)} B</Badge></p>
-            <p className="text-sm">Stored Packets: <Badge>{analysis.stored_packets?.toLocaleString()}</Badge></p>
-            <p className="text-sm">Status: <Badge variant="outline" className="bg-green-50 text-green-700">Live Monitoring</Badge></p>
+            <p className="text-sm">
+              Current Packets/sec: <Badge>{analysis.packets_per_second.toLocaleString()}</Badge>
+            </p>
+            <p className="text-sm">
+              Avg Packet Size: <Badge>{analysis.average_packet_size.toFixed(0)} B</Badge>
+            </p>
+            <p className="text-sm">
+              Stored Packets: <Badge>{analysis.stored_packets.toLocaleString()}</Badge>
+            </p>
+            <p className="text-sm">
+              Top Protocol: <Badge variant="outline">{analysis.top_protocol}</Badge>
+            </p>
+            <p className="text-sm">
+              Status:{" "}
+              <Badge variant="outline" className="bg-green-50 text-green-700">
+                Live Monitoring
+              </Badge>
+            </p>
           </>
         )}
       </CardContent>
