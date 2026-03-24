@@ -39,7 +39,7 @@ project-root/
 │   │   └── ml/             # ML models
 │   └── requirements.txt
 │
-├── docker-compose.yml        # Local development
+├── scripts/                 # Local setup/run helpers
 └── README.md
 ```
 
@@ -49,7 +49,13 @@ project-root/
 
 ### Local Development
 
-**Terminal 1 - Backend:**
+**Recommended setup:**
+```bash
+./scripts/setup-local.sh
+./scripts/dev-local.sh
+```
+
+**Manual backend run:**
 ```bash
 cd backend
 pip install -r requirements.txt
@@ -64,11 +70,6 @@ pnpm install
 pnpm dev
 ```
 → http://localhost:3000
-
-### With Docker
-```bash
-docker-compose up
-```
 
 ---
 
@@ -273,7 +274,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 **Backend (.env.local):**
 ```
 BACKEND_PORT=8000
-DATABASE_URL=sqlite:///./test.db
+ALLOWED_ORIGINS=http://localhost:3000
 ```
 
 ---
@@ -287,7 +288,6 @@ DATABASE_URL=sqlite:///./test.db
 | UI Library | Shadcn/UI |
 | ML | Scikit-learn |
 | Deployment | Vercel, Railway/Render |
-| Containers | Docker, Docker Compose |
 
 ---
 
@@ -304,10 +304,6 @@ pnpm lint
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 python -m pytest
-
-# Docker
-docker-compose up
-docker-compose down
 ```
 
 ---

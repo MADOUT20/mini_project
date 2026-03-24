@@ -187,7 +187,7 @@ project-root/
 │   ├── requirements.txt
 │   └── main.py
 │
-├── docker-compose.yml
+├── scripts/
 ├── README.md
 ├── PROJECT_DOCUMENTATION.md
 └── OPTIMIZATION.md

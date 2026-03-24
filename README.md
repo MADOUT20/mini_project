@@ -8,29 +8,66 @@ A full-stack security monitoring dashboard with real-time packet inspection, thr
 project-root/
 ├── frontend/          # Next.js + React UI (Deployed on Vercel)
 ├── backend/           # FastAPI backend (Deploy on Railway/Render/AWS)
-└── docker-compose.yml # Local development
+├── scripts/           # Local setup and run helpers
+└── README.md
 ```
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js 18+ & pnpm
+- Node.js 18+
 - Python 3.11+
-- Docker
+- npm or pnpm
 
 ### Local Development
 
-**With Docker (Recommended)**
+**macOS / Linux**
 ```bash
-docker-compose up --build
+./scripts/setup-local.sh
+./scripts/dev-local.sh
 ```
-This will start both the frontend and backend services.
+
+This will start:
 - Frontend: http://localhost:3000
 - Backend: http://localhost:8000
 
+You can also run a quick dependency check without starting the app:
+```bash
+./scripts/dev-local.sh --check
+```
+
+If you want packet capture on macOS, use:
+```bash
+./scripts/dev-local-capture.sh
+```
+
+Note: native packet capture on macOS needs admin permissions because Scapy must access `/dev/bpf*`.
+
+**Windows PowerShell**
+```powershell
+.\scripts\setup-local.ps1
+.\scripts\dev-local.ps1
+```
+
+Quick dependency check:
+```powershell
+.\scripts\dev-local.ps1 -Check
+```
+
+If you want packet capture on Windows:
+```powershell
+.\scripts\dev-local-capture.ps1
+```
+
+Notes for Windows:
+- the PowerShell scripts open separate backend and frontend windows
+- install `Npcap` before trying live packet capture
+- run capture mode so the backend starts with Administrator access
+
 ### Environment Variables
 
-Copy `.env.example` to `.env.local` and update values if needed. The default values are set to work with the docker-compose setup.
+`./scripts/setup-local.sh` creates local env files for you if they do not exist yet.
+The defaults are:
 
 ```bash
 # Frontend
@@ -38,18 +75,10 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 BACKEND_API_URL=http://localhost:8000
 
 # Backend
+BACKEND_HOST=0.0.0.0
 BACKEND_PORT=8000
+ALLOWED_ORIGINS=http://localhost:3000
 ```
-
-## 🖥️ VPS Deployment
-
-For a real Linux VPS deployment that supports packet capture, use the production compose file and guide in [DEPLOY_VPS.md](/Users/siddharthchillapwar/Desktop/network%20malware%20detection%20systerm/mini_project/DEPLOY_VPS.md).
-
-Key production files:
-
-- [docker-compose.vps.yml](/Users/siddharthchillapwar/Desktop/network%20malware%20detection%20systerm/mini_project/docker-compose.vps.yml)
-- [.env.vps.example](/Users/siddharthchillapwar/Desktop/network%20malware%20detection%20systerm/mini_project/.env.vps.example)
-- [chaosfaction.xyz.conf](/Users/siddharthchillapwar/Desktop/network%20malware%20detection%20systerm/mini_project/deploy/nginx/chaosfaction.xyz.conf)
 
 ## 🔌 API Endpoints
 
@@ -90,4 +119,3 @@ const fetchTraffic = async () => {
 
 - [Next.js Docs](https://nextjs.org/docs)
 - [FastAPI Docs](https://fastapi.tiangolo.com)
-- [Docker Docs](https://docs.docker.com)

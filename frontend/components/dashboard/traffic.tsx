@@ -143,7 +143,20 @@ export function TrafficChartPanel() {
       await fetchStats()
     } catch (err) {
       console.error("Packet capture failed:", err)
-      setError("Packet capture failed. Check backend permissions and try again.")
+      const message =
+        err instanceof Error ? err.message : "Packet capture failed. Check backend permissions and try again."
+
+      if (message.includes("/dev/bpf") || message.includes("Scapy as root") || message.includes("admin permissions")) {
+        setError(
+          "Packet capture needs macOS admin access. Restart using ./scripts/dev-local-capture.sh, or run only the backend with sudo.",
+        )
+      } else if (message.includes("Npcap") || message.includes("Administrator PowerShell") || message.includes("WinPcap")) {
+        setError(
+          "Packet capture on Windows needs Npcap and an Administrator PowerShell. Use .\\scripts\\dev-local-capture.ps1 on the demo machine.",
+        )
+      } else {
+        setError(message)
+      }
     } finally {
       setCapturing(false)
     }

@@ -3,6 +3,7 @@ Packet Capture Service
 Handles real-time packet capturing and processing
 """
 
+import os
 from scapy.all import sniff, IP, TCP, UDP, ICMP, DNS, DNSQR
 from typing import Dict, List, Any, Optional
 from collections import defaultdict
@@ -52,7 +53,33 @@ class PacketCaptureService:
             return self._format_packets(packets)
         
         except Exception as e:
-            return {"error": f"Failed to capture packets: {str(e)}"}
+            message = str(e)
+            lower_message = message.lower()
+
+            if "/dev/bpf" in message or "Scapy as root" in message:
+                return {
+                    "error": (
+                        "Packet capture requires admin permissions on macOS. "
+                        "Start the app with ./scripts/dev-local-capture.sh or run the backend with sudo. "
+                        f"Original error: {message}"
+                    )
+                }
+
+            if os.name == "nt" and (
+                "npcap" in lower_message
+                or "winpcap" in lower_message
+                or "permission denied" in lower_message
+                or "pcap" in lower_message
+            ):
+                return {
+                    "error": (
+                        "Packet capture on Windows needs Npcap and an Administrator PowerShell. "
+                        "Start the app with .\\scripts\\dev-local-capture.ps1 after installing Npcap. "
+                        f"Original error: {message}"
+                    )
+                }
+
+            return {"error": f"Failed to capture packets: {message}"}
     
     def _process_packet(self, packet):
         """Process and store packet information"""
