@@ -106,6 +106,7 @@ class MobileProxyService:
             destination_host=destination_host,
             destination_port=destination_port,
             request_bytes=len(request_head),
+            application_protocol="HTTPS_TUNNEL",
         )
         self._record_client_activity(
             source_ip,
@@ -150,6 +151,7 @@ class MobileProxyService:
             destination_host=destination_host,
             destination_port=destination_port,
             request_bytes=len(request_head),
+            application_protocol="HTTP_PROXY_HTTP",
         )
         self._record_client_activity(
             source_ip,

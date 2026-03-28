@@ -6,7 +6,8 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { AlertCircle, Archive, RefreshCw } from "lucide-react"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { AlertCircle, Archive, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react"
 import { getNotifications, type Notification } from "@/lib/api"
 
 const DASHBOARD_REFRESH_EVENT = "chaosfaction:dashboard-refresh"
@@ -58,6 +59,18 @@ function useNotificationFeed() {
 export function AlertNotifications() {
   const { notifications, loading, error, fetchNotifications } = useNotificationFeed()
   const alerts = notifications.slice(0, 4)
+  const [activeIndex, setActiveIndex] = useState(0)
+
+  useEffect(() => {
+    if (alerts.length === 0) {
+      setActiveIndex(0)
+      return
+    }
+
+    setActiveIndex((currentIndex) => Math.min(currentIndex, alerts.length - 1))
+  }, [alerts.length])
+
+  const activeAlert = alerts[activeIndex]
 
   return (
     <Card>
@@ -77,18 +90,47 @@ export function AlertNotifications() {
         ) : alerts.length === 0 ? (
           <p className="text-sm text-slate-500">No active alerts right now.</p>
         ) : (
-          alerts.map((alert) => (
-            <div key={alert.id} className="flex items-start justify-between gap-3 p-3 bg-slate-50 rounded">
-              <div className="flex-1 space-y-1">
-                <p className="font-medium text-sm">{formatTitle(alert)}</p>
-                <p className="text-xs text-slate-500">{alert.message}</p>
-                <p className="text-xs text-slate-400">{new Date(alert.timestamp).toLocaleString()}</p>
+          <>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-slate-500">
+                Alert {activeIndex + 1} of {alerts.length}
+              </p>
+              {alerts.length > 1 && (
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="h-8 w-8"
+                    onClick={() => setActiveIndex((currentIndex) => Math.max(0, currentIndex - 1))}
+                    disabled={activeIndex === 0}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    <span className="sr-only">Previous alert</span>
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="h-8 w-8"
+                    onClick={() => setActiveIndex((currentIndex) => Math.min(alerts.length - 1, currentIndex + 1))}
+                    disabled={activeIndex === alerts.length - 1}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                    <span className="sr-only">Next alert</span>
+                  </Button>
+                </div>
+              )}
+            </div>
+            <div className="flex min-h-36 items-start justify-between gap-3 rounded-xl bg-slate-50 p-4">
+              <div className="flex-1 space-y-2">
+                <p className="font-medium text-sm">{formatTitle(activeAlert)}</p>
+                <p className="text-xs leading-5 text-slate-500">{activeAlert.message}</p>
+                <p className="text-xs text-slate-400">{new Date(activeAlert.timestamp).toLocaleString()}</p>
               </div>
-              <Badge variant={getSeverityBadge(alert.severity)}>
-                {alert.severity}
+              <Badge variant={getSeverityBadge(activeAlert.severity)}>
+                {activeAlert.severity}
               </Badge>
             </div>
-          ))
+          </>
         )}
       </CardContent>
     </Card>
@@ -117,18 +159,20 @@ export function NotificationArchive() {
         ) : notifications.length === 0 ? (
           <p className="text-slate-500">No notification history yet.</p>
         ) : (
-          <div className="space-y-2">
-            {notifications.map((alert) => (
-              <div key={alert.id} className="p-3 text-sm border rounded space-y-1">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="font-medium">{formatTitle(alert)}</p>
-                  <Badge variant={getSeverityBadge(alert.severity)}>{alert.severity}</Badge>
+          <ScrollArea className="h-96 pr-3">
+            <div className="space-y-2">
+              {notifications.map((alert) => (
+                <div key={alert.id} className="space-y-1 rounded border p-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-medium">{formatTitle(alert)}</p>
+                    <Badge variant={getSeverityBadge(alert.severity)}>{alert.severity}</Badge>
+                  </div>
+                  <p className="text-slate-600">{alert.message}</p>
+                  <p className="text-xs text-slate-400">{new Date(alert.timestamp).toLocaleString()}</p>
                 </div>
-                <p className="text-slate-600">{alert.message}</p>
-                <p className="text-xs text-slate-400">{new Date(alert.timestamp).toLocaleString()}</p>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </ScrollArea>
         )}
       </CardContent>
     </Card>

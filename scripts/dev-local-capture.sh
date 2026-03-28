@@ -21,9 +21,14 @@ frontend_pid=""
 ensure_port_free() {
   local port="$1"
   local name="$2"
+  local use_sudo="${3:-}"
   local process_info
 
-  process_info="$(lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)"
+  if [ "$use_sudo" = "sudo" ]; then
+    process_info="$(sudo lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)"
+  else
+    process_info="$(lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)"
+  fi
   if [ -z "$process_info" ]; then
     return 0
   fi
@@ -52,10 +57,13 @@ cleanup() {
   cleanup_done=1
 
   if [ -n "$backend_pid" ]; then
+    sudo pkill -P "$backend_pid" 2>/dev/null || true
+    sudo kill "$backend_pid" 2>/dev/null || true
     kill "$backend_pid" 2>/dev/null || true
   fi
 
   if [ -n "$frontend_pid" ]; then
+    pkill -P "$frontend_pid" 2>/dev/null || true
     kill "$frontend_pid" 2>/dev/null || true
   fi
 }
@@ -82,13 +90,14 @@ else
   exit 1
 fi
 
-ensure_port_free "$FRONTEND_PORT" "Frontend"
-ensure_port_free "8000" "Backend"
-
-lan_ip="$(get_lan_ip || true)"
-
 echo "Requesting admin access for packet capture..."
 sudo -v
+
+ensure_port_free "$FRONTEND_PORT" "Frontend"
+ensure_port_free "8000" "Backend" "sudo"
+ensure_port_free "$PROXY_PORT" "Proxy" "sudo"
+
+lan_ip="$(get_lan_ip || true)"
 
 echo "Starting backend with admin permissions on http://localhost:8000"
 (
@@ -103,7 +112,7 @@ echo "Starting frontend on http://localhost:3000"
   cd "$FRONTEND_DIR"
   export BACKEND_API_URL="$BACKEND_API_URL"
   export NEXT_PUBLIC_API_URL="$BACKEND_API_URL"
-  "${frontend_cmd[@]}"
+  exec "${frontend_cmd[@]}"
 ) &
 frontend_pid=$!
 

@@ -385,6 +385,7 @@ class ThreatDetectionService:
                 "packet_count": 0,
                 "hosts": set(),
                 "destination_ips": set(),
+                "ports": set(),
             }
         )
 
@@ -393,11 +394,13 @@ class ThreatDetectionService:
             destination_ip = packet.get("dest_ip")
             destination_port = packet.get("dest_port")
             observed_host = self._normalize_dns_query(packet.get("observed_host"))
+            application_protocol = str(packet.get("application_protocol") or "").upper()
 
             if not source_ip or not self._is_private_ip(source_ip):
                 continue
 
-            if destination_port != 80:
+            is_plain_http = application_protocol in {"HTTP", "HTTP_PROXY_HTTP"} or destination_port in {80, 8080}
+            if not is_plain_http:
                 continue
 
             if destination_ip and self._is_private_ip(destination_ip):
@@ -414,12 +417,15 @@ class ThreatDetectionService:
                 profile["hosts"].add(observed_host)
             if destination_ip:
                 profile["destination_ips"].add(destination_ip)
+            if isinstance(destination_port, int):
+                profile["ports"].add(destination_port)
 
         for (source_ip, identifier), profile in http_profiles.items():
             packet_count = profile["packet_count"]
             target_host = sorted(profile["hosts"])[0] if profile["hosts"] else None
             target_ip = sorted(profile["destination_ips"])[0] if profile["destination_ips"] else None
             target_label = target_host or target_ip or identifier
+            target_port = sorted(profile["ports"])[0] if profile["ports"] else 80
 
             threats.append(
                 self._build_threat(
@@ -430,9 +436,10 @@ class ThreatDetectionService:
                     severity="MEDIUM",
                     destination_host=target_host,
                     destination_ip=target_ip,
-                    destination_port=80,
+                    destination_port=target_port,
                     evidence=[
                         f"Observed {packet_count} plaintext HTTP request event(s) from {source_ip}",
+                        f"Observed plaintext HTTP destination port {target_port}",
                         "Plain HTTP exposes browsing traffic without TLS encryption and should be reviewed.",
                     ],
                     packet_count=packet_count,

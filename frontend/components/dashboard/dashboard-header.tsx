@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Bell, Menu, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -42,12 +42,30 @@ export function DashboardHeader({ activeTab, onTabChange, onMenuClick }: Dashboa
   const [showArchived, setShowArchived] = useState(false)
   const [alerts, setAlerts] = useState<Notification[]>([])
   const [loadingAlerts, setLoadingAlerts] = useState(true)
+  const dismissedAlertIdsRef = useRef<Set<string>>(new Set())
+
+  const archiveAlerts = (items: Notification[]) => {
+    setArchivedAlerts((currentAlerts) => {
+      const nextAlerts = [...items, ...currentAlerts]
+      const seen = new Set<string>()
+      return nextAlerts.filter((alert) => {
+        if (seen.has(alert.id)) {
+          return false
+        }
+        seen.add(alert.id)
+        return true
+      })
+    })
+  }
 
   useEffect(() => {
     const fetchAlerts = async () => {
       try {
         const data = await getNotifications()
-        setAlerts(data.notifications || [])
+        const incomingAlerts = data.notifications || []
+        setAlerts(
+          incomingAlerts.filter((alert) => !dismissedAlertIdsRef.current.has(alert.id)),
+        )
         setLoadingAlerts(false)
       } catch (err) {
         console.error("Failed to fetch notifications:", err)
@@ -78,6 +96,19 @@ export function DashboardHeader({ activeTab, onTabChange, onMenuClick }: Dashboa
     }
   }, [])
 
+  const activeAlertCount = alerts.length
+  const archivedAlertCount = archivedAlerts.length
+
+  const clearAllAlerts = () => {
+    if (alerts.length === 0) {
+      return
+    }
+
+    alerts.forEach((alert) => dismissedAlertIdsRef.current.add(alert.id))
+    archiveAlerts(alerts)
+    setAlerts([])
+  }
+
   return (
     <header className="flex min-h-16 items-center justify-between gap-3 border-b border-border bg-card px-4 py-3 sm:px-6">
       <div className="flex min-w-0 items-center gap-3 sm:gap-4">
@@ -103,9 +134,9 @@ export function DashboardHeader({ activeTab, onTabChange, onMenuClick }: Dashboa
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="relative">
               <Bell className="h-5 w-5" />
-              {!loadingAlerts && alerts.length > 0 && (
+              {!loadingAlerts && activeAlertCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] text-destructive-foreground font-semibold">
-                  {alerts.length}
+                  {activeAlertCount}
                 </span>
               )}
               <span className="sr-only">Notifications</span>
@@ -119,7 +150,7 @@ export function DashboardHeader({ activeTab, onTabChange, onMenuClick }: Dashboa
                 className="h-6 text-xs"
                 onClick={() => setShowArchived(false)}
               >
-                Active ({alerts.length})
+                Active ({activeAlertCount})
               </Button>
               <Button
                 variant={showArchived ? "default" : "ghost"}
@@ -127,18 +158,15 @@ export function DashboardHeader({ activeTab, onTabChange, onMenuClick }: Dashboa
                 className="h-6 text-xs"
                 onClick={() => setShowArchived(true)}
               >
-                Archive ({archivedAlerts.length})
+                Archive ({archivedAlertCount})
               </Button>
             </div>
-            {!showArchived && alerts.length > 0 && (
+            {!showArchived && activeAlertCount > 0 && (
               <Button
                 variant="ghost"
                 size="sm"
                 className="w-full h-6 px-2 text-xs text-muted-foreground hover:text-foreground justify-center"
-                onClick={() => {
-                  setArchivedAlerts([...archivedAlerts, ...alerts])
-                  setAlerts([])
-                }}
+                onClick={clearAllAlerts}
               >
                 Clear All
               </Button>
@@ -146,7 +174,7 @@ export function DashboardHeader({ activeTab, onTabChange, onMenuClick }: Dashboa
             <DropdownMenuSeparator />
             {loadingAlerts ? (
               <div className="p-4 text-center text-sm text-slate-500">Loading notifications...</div>
-            ) : (showArchived ? archivedAlerts.length > 0 : alerts.length > 0) ? (
+            ) : (showArchived ? archivedAlertCount > 0 : activeAlertCount > 0) ? (
               <div className="max-h-96 overflow-y-auto space-y-2 p-2">
                 {(showArchived ? archivedAlerts : alerts).map((alert) => {
                   const severity = alert.severity || "MEDIUM"

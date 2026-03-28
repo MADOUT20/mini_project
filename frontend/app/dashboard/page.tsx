@@ -47,17 +47,17 @@ export default function DashboardPage() {
             <>
               <StatCards healthData={healthData} />
               <div className="grid gap-4 xl:grid-cols-3">
-                <div className="lg:col-span-2">
+                <div className="space-y-4 xl:col-span-2">
                   <TrafficChartPanel />
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <ThreatResponsePanel />
+                    <AlertNotifications />
+                  </div>
                 </div>
                 <div className="space-y-4">
                   <ObservedDevicesCard />
                   <ThreatDetectionPanel excludeLow />
                 </div>
-              </div>
-              <div className="grid gap-4 lg:grid-cols-2">
-                <ThreatResponsePanel />
-                <AlertNotifications />
               </div>
               <BlockedSitesCard />
             </>

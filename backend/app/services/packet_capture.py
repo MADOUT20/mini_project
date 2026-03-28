@@ -143,6 +143,7 @@ class PacketCaptureService:
         destination_host: Optional[str],
         destination_port: Optional[int],
         request_bytes: int = 0,
+        application_protocol: str = "HTTP_PROXY",
     ) -> Dict[str, Any]:
         """Record a packet-like observation from the local HTTP/HTTPS proxy."""
         packet_info = {
@@ -151,7 +152,7 @@ class PacketCaptureService:
             "source_ip": source_ip,
             "dest_ip": self._resolve_host_ip(destination_host),
             "protocol": "TCP",
-            "application_protocol": "HTTP_PROXY",
+            "application_protocol": application_protocol,
             "source_port": None,
             "dest_port": destination_port,
             "flags": [],
@@ -235,7 +236,11 @@ class PacketCaptureService:
         observed_host = self._extract_observed_host(packet)
         if observed_host:
             packet_info["observed_host"] = observed_host
-        
+            if TCP in packet and packet_info.get("dest_port") in {80, 8080}:
+                packet_info["application_protocol"] = "HTTP"
+            elif packet_info.get("application_protocol") is None:
+                packet_info["application_protocol"] = "TLS"
+
         return packet_info
     
     async def filter_packets(self, **filters) -> List[Dict[str, Any]]:
@@ -433,6 +438,8 @@ class PacketCaptureService:
                 or payload.startswith(b"HEAD ")
                 or payload.startswith(b"PUT ")
                 or payload.startswith(b"OPTIONS ")
+                or payload.startswith(b"DELETE ")
+                or payload.startswith(b"PATCH ")
             ):
                 return None
 

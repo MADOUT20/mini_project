@@ -6,7 +6,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { AlertTriangle, MapPin, RefreshCw, Shield, Smartphone, Wifi, Zap } from "lucide-react"
+import { AlertTriangle, ChevronLeft, ChevronRight, MapPin, RefreshCw, Shield, Smartphone, Wifi, Zap } from "lucide-react"
 import {
   clearBlockedSites,
   getBlockedSites,
@@ -83,6 +83,7 @@ export function ThreatDetectionPanel({ excludeLow = false }: ThreatDetectionPane
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [message, setMessage] = useState("")
+  const [activeIndex, setActiveIndex] = useState(0)
 
   const fetchThreats = async () => {
     try {
@@ -131,6 +132,17 @@ export function ThreatDetectionPanel({ excludeLow = false }: ThreatDetectionPane
       return new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime()
     })
 
+  useEffect(() => {
+    if (visibleThreats.length === 0) {
+      setActiveIndex(0)
+      return
+    }
+
+    setActiveIndex((currentIndex) => Math.min(currentIndex, visibleThreats.length - 1))
+  }, [visibleThreats.length])
+
+  const activeThreat = visibleThreats[activeIndex]
+
   if (loading && threats.length === 0) {
     return (
       <Card>
@@ -172,32 +184,61 @@ export function ThreatDetectionPanel({ excludeLow = false }: ThreatDetectionPane
             </p>
           </div>
         ) : (
-          visibleThreats.map((threat) => (
+          <>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-slate-500">
+                Threat {activeIndex + 1} of {visibleThreats.length}
+              </p>
+              {visibleThreats.length > 1 && (
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="h-8 w-8"
+                    onClick={() => setActiveIndex((currentIndex) => Math.max(0, currentIndex - 1))}
+                    disabled={activeIndex === 0}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    <span className="sr-only">Previous threat</span>
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="h-8 w-8"
+                    onClick={() => setActiveIndex((currentIndex) => Math.min(visibleThreats.length - 1, currentIndex + 1))}
+                    disabled={activeIndex === visibleThreats.length - 1}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                    <span className="sr-only">Next threat</span>
+                  </Button>
+                </div>
+              )}
+            </div>
             <div
-              key={threat.id}
-              className={`rounded-2xl border p-4 shadow-sm ${getSeverityClass(threat.severity)}`}
+              key={activeThreat.id}
+              className={`rounded-2xl border p-4 shadow-sm ${getSeverityClass(activeThreat.severity)}`}
             >
               <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="space-y-1">
-                  <p className="text-sm font-semibold text-slate-900">{formatThreatType(threat.type)}</p>
+                  <p className="text-sm font-semibold text-slate-900">{formatThreatType(activeThreat.type)}</p>
                   <p className="text-xs text-slate-600">
-                    {isPrivateNetworkAddress(threat.source_ip) ? "Detected from a local Wi-Fi device" : "Detected from network traffic"}
+                    {isPrivateNetworkAddress(activeThreat.source_ip) ? "Detected from a local Wi-Fi device" : "Detected from network traffic"}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2 sm:justify-end">
                   <Badge
-                    variant={threat.severity === "CRITICAL" ? "destructive" : "default"}
+                    variant={activeThreat.severity === "CRITICAL" ? "destructive" : "default"}
                     className={
-                      threat.severity === "HIGH"
+                      activeThreat.severity === "HIGH"
                         ? "bg-orange-600"
-                        : threat.severity === "MEDIUM"
+                        : activeThreat.severity === "MEDIUM"
                           ? "bg-yellow-600"
                           : "bg-blue-600"
                     }
                   >
-                    {threat.severity}
+                    {activeThreat.severity}
                   </Badge>
-                  <Badge variant="outline">{formatStatus(threat.status)}</Badge>
+                  <Badge variant="outline">{formatStatus(activeThreat.status)}</Badge>
                 </div>
               </div>
 
@@ -206,42 +247,42 @@ export function ThreatDetectionPanel({ excludeLow = false }: ThreatDetectionPane
                   <p className="text-[11px] uppercase tracking-wide text-slate-500">Device</p>
                   <p className="mt-1 flex items-center gap-2 text-sm font-medium text-slate-900">
                     <Smartphone className="h-4 w-4 text-slate-500" />
-                    {formatThreatSource(threat.source_ip)}
+                    {formatThreatSource(activeThreat.source_ip)}
                   </p>
                 </div>
                 <div className="rounded-xl bg-white/75 px-3 py-2">
                   <p className="text-[11px] uppercase tracking-wide text-slate-500">Target</p>
                   <p className="mt-1 break-all text-sm font-medium text-slate-900">
-                    {threat.destination_host || threat.destination_ip || "Unknown target"}
+                    {activeThreat.destination_host || activeThreat.destination_ip || "Unknown target"}
                   </p>
                 </div>
-                {threat.destination_ip && (
+                {activeThreat.destination_ip && (
                   <div className="rounded-xl bg-white/75 px-3 py-2">
                     <p className="text-[11px] uppercase tracking-wide text-slate-500">Resolved IP</p>
                     <p className="mt-1 flex items-center gap-2 text-sm font-medium text-slate-900">
                       <MapPin className="h-4 w-4 text-slate-500" />
-                      {threat.destination_ip}
-                      {threat.destination_port ? `:${threat.destination_port}` : ""}
+                      {activeThreat.destination_ip}
+                      {activeThreat.destination_port ? `:${activeThreat.destination_port}` : ""}
                     </p>
                   </div>
                 )}
                 <div className="rounded-xl bg-white/75 px-3 py-2">
                   <p className="text-[11px] uppercase tracking-wide text-slate-500">Confidence</p>
                   <p className="mt-1 text-sm font-medium text-slate-900">
-                    {(threat.threat_score * 100).toFixed(0)}%
+                    {(activeThreat.threat_score * 100).toFixed(0)}%
                   </p>
                 </div>
               </div>
 
               <div className="rounded-xl bg-white/70 px-3 py-3">
                 <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Alert message</p>
-                <p className="mt-2 text-sm text-slate-700">{threat.description}</p>
+                <p className="mt-2 text-sm text-slate-700">{activeThreat.description}</p>
               </div>
 
-              {threat.evidence && threat.evidence.length > 0 && (
+              {activeThreat.evidence && activeThreat.evidence.length > 0 && (
                 <div className="mb-3 mt-3 space-y-1">
-                  {threat.evidence.slice(0, 2).map((item, index) => (
-                    <p key={`${threat.id}-evidence-${index}`} className="text-xs text-slate-500">
+                  {activeThreat.evidence.slice(0, 2).map((item, index) => (
+                    <p key={`${activeThreat.id}-evidence-${index}`} className="text-xs text-slate-500">
                       • {item}
                     </p>
                   ))}
@@ -251,22 +292,22 @@ export function ThreatDetectionPanel({ excludeLow = false }: ThreatDetectionPane
                 <Button
                   size="sm"
                   className="bg-red-600 text-xs hover:bg-red-700 sm:flex-1"
-                  onClick={() => handleThreatAction(threat.id, "BLOCK")}
-                  disabled={threat.status === "blocked"}
+                  onClick={() => handleThreatAction(activeThreat.id, "BLOCK")}
+                  disabled={activeThreat.status === "blocked"}
                 >
-                  {threat.status === "blocked" ? "Blocked" : "Block"}
+                  {activeThreat.status === "blocked" ? "Blocked" : "Block"}
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
                   className="text-xs sm:flex-1"
-                  onClick={() => handleThreatAction(threat.id, "INVESTIGATE")}
+                  onClick={() => handleThreatAction(activeThreat.id, "INVESTIGATE")}
                 >
                   Investigate
                 </Button>
               </div>
             </div>
-          ))
+          </>
         )}
       </CardContent>
     </Card>
