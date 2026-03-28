@@ -18,7 +18,9 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { useIsMobile } from "@/components/ui/use-mobile"
 
 const navItems = [
   { icon: LayoutDashboard, label: "Overview", id: "overview" },
@@ -34,10 +36,97 @@ const navItems = [
 interface DashboardSidebarProps {
   activeTab: string
   onTabChange: (tab: string) => void
+  mobileOpen?: boolean
+  onMobileOpenChange?: (open: boolean) => void
 }
 
-export function DashboardSidebar({ activeTab, onTabChange }: DashboardSidebarProps) {
+export function DashboardSidebar({
+  activeTab,
+  onTabChange,
+  mobileOpen = false,
+  onMobileOpenChange,
+}: DashboardSidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
+  const isMobile = useIsMobile()
+
+  const handleTabChange = (tab: string) => {
+    onTabChange(tab)
+    onMobileOpenChange?.(false)
+  }
+
+  const navigationItems = (
+    <nav className="flex-1 space-y-1 p-3">
+      {navItems.map((item) => {
+        const isActive = activeTab === item.id
+        const button = (
+          <button
+            key={item.id}
+            onClick={() => handleTabChange(item.id)}
+            className={cn(
+              "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors",
+              isActive
+                ? "bg-sidebar-accent text-sidebar-primary"
+                : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            )}
+          >
+            <item.icon className="h-4.5 w-4.5 shrink-0" />
+            {(!collapsed || isMobile) && <span>{item.label}</span>}
+          </button>
+        )
+
+        if (collapsed && !isMobile) {
+          return (
+            <Tooltip key={item.id}>
+              <TooltipTrigger asChild>{button}</TooltipTrigger>
+              <TooltipContent side="right" className="bg-popover text-popover-foreground">
+                {item.label}
+              </TooltipContent>
+            </Tooltip>
+          )
+        }
+
+        return button
+      })}
+    </nav>
+  )
+
+  if (isMobile) {
+    return (
+      <Sheet open={mobileOpen} onOpenChange={onMobileOpenChange}>
+        <SheetContent
+          side="left"
+          className="w-[86vw] max-w-[22rem] border-sidebar-border bg-sidebar p-0 text-sidebar-foreground"
+        >
+          <SheetHeader className="border-b border-sidebar-border px-4 py-4 text-left">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary">
+                <Shield className="h-5 w-5 text-primary-foreground" />
+              </div>
+              <div>
+                <SheetTitle className="text-base text-sidebar-foreground">NetGuard</SheetTitle>
+                <SheetDescription className="text-xs text-sidebar-foreground/70">
+                  Mobile navigation
+                </SheetDescription>
+              </div>
+            </div>
+          </SheetHeader>
+
+          <div className="flex h-full flex-col">
+            {navigationItems}
+            <div className="border-t border-sidebar-border p-3">
+              <Link
+                href="/login"
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent"
+              >
+                <LogOut className="h-4.5 w-4.5 shrink-0" />
+                <span>Logout</span>
+              </Link>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+    )
+  }
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -57,39 +146,7 @@ export function DashboardSidebar({ activeTab, onTabChange }: DashboardSidebarPro
           )}
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 space-y-1 p-3">
-          {navItems.map((item) => {
-            const isActive = activeTab === item.id
-            const button = (
-              <button
-                key={item.id}
-                onClick={() => onTabChange(item.id)}
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors",
-                  isActive
-                    ? "bg-sidebar-accent text-sidebar-primary"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                )}
-              >
-                <item.icon className="h-4.5 w-4.5 shrink-0" />
-                {!collapsed && <span>{item.label}</span>}
-              </button>
-            )
-
-            if (collapsed) {
-              return (
-                <Tooltip key={item.id}>
-                  <TooltipTrigger asChild>{button}</TooltipTrigger>
-                  <TooltipContent side="right" className="bg-popover text-popover-foreground">
-                    {item.label}
-                  </TooltipContent>
-                </Tooltip>
-              )
-            }
-            return button
-          })}
-        </nav>
+        {navigationItems}
 
         {/* Bottom */}
         <div className="border-t border-sidebar-border p-3 space-y-1">

@@ -3,7 +3,9 @@
 @tailwind utilities;
 
 body {
-  font-family: "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  font-family: "Avenir Next", "Helvetica Neue", "Segoe UI", Arial, sans-serif;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 @layer utilities {

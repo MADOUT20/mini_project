@@ -35,11 +35,15 @@ if (-not (Test-Path (Join-Path $FrontendDir "node_modules"))) {
 }
 
 $ShellExe = Get-ShellExecutable
-$FrontendCommand = if (Get-Command pnpm -ErrorAction SilentlyContinue) { "pnpm dev" } else { "npm run dev" }
+$FrontendNext = Join-Path $FrontendDir "node_modules\.bin\next.cmd"
 $NpcapService = Get-Service -Name npcap -ErrorAction SilentlyContinue
 
 if (-not $NpcapService) {
   Write-Warning "Npcap was not detected. Install Npcap before using live packet capture on Windows."
+}
+
+if (-not (Test-Path $FrontendNext)) {
+  throw "Next.js local binary is missing. Run .\scripts\setup-local.ps1 first."
 }
 
 $EscapedBackendDir = Escape-SingleQuotes $BackendDir
@@ -47,9 +51,10 @@ $EscapedFrontendDir = Escape-SingleQuotes $FrontendDir
 $EscapedBackendPython = Escape-SingleQuotes $BackendVenvPython
 $EscapedBackendApiUrl = Escape-SingleQuotes $BackendApiUrl
 $EscapedAllowedOrigins = Escape-SingleQuotes $AllowedOrigins
+$EscapedFrontendNext = Escape-SingleQuotes $FrontendNext
 
 $BackendCommand = "& { Set-Location '$EscapedBackendDir'; `$env:ALLOWED_ORIGINS='$EscapedAllowedOrigins'; & '$EscapedBackendPython' -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload }"
-$FrontendCommandBlock = "& { Set-Location '$EscapedFrontendDir'; `$env:BACKEND_API_URL='$EscapedBackendApiUrl'; `$env:NEXT_PUBLIC_API_URL='$EscapedBackendApiUrl'; $FrontendCommand }"
+$FrontendCommandBlock = "& { Set-Location '$EscapedFrontendDir'; `$env:BACKEND_API_URL='$EscapedBackendApiUrl'; `$env:NEXT_PUBLIC_API_URL='$EscapedBackendApiUrl'; & '$EscapedFrontendNext' dev --turbo --hostname 0.0.0.0 --port 3000 }"
 
 Start-Process -FilePath $ShellExe -Verb RunAs -ArgumentList @("-NoExit", "-Command", $BackendCommand) -WorkingDirectory $BackendDir | Out-Null
 Start-Process -FilePath $ShellExe -ArgumentList @("-NoExit", "-Command", $FrontendCommandBlock) -WorkingDirectory $FrontendDir | Out-Null
@@ -59,4 +64,5 @@ Write-Host "ChaosFaction capture mode is starting in separate PowerShell windows
 Write-Host "Frontend: http://localhost:3000"
 Write-Host "Backend:  http://localhost:8000"
 Write-Host "The backend window should request Administrator access."
+Write-Host "If the phone loses access later, unblock the site from the Mac/Windows dashboard or set the phone proxy back to None."
 Write-Host "Close the two PowerShell windows to stop the app."

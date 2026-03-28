@@ -4,7 +4,8 @@ Handles real-time packet capturing and processing
 """
 
 import os
-from scapy.all import sniff, IP, TCP, UDP, ICMP, DNS, DNSQR
+import socket
+from scapy.all import sniff, IP, TCP, UDP, ICMP, DNS, DNSQR, Raw, conf, get_if_list
 from typing import Dict, List, Any, Optional
 from collections import defaultdict
 from datetime import datetime
@@ -23,8 +24,53 @@ class PacketCaptureService:
             "protocols": defaultdict(int),
             "ports": defaultdict(int),
         }
+
+    def get_available_interfaces(self) -> Dict[str, Any]:
+        """Return capture interfaces that Scapy can see on this host."""
+        try:
+            interfaces = sorted(set(get_if_list()))
+        except Exception:
+            interfaces = []
+
+        default_interface = None
+        try:
+            default_interface = str(conf.iface) if conf.iface else None
+        except Exception:
+            default_interface = None
+
+        return {
+            "interfaces": interfaces,
+            "default_interface": default_interface,
+        }
+
+    def get_preferred_interface(self) -> Optional[str]:
+        """Pick the active interface from the default route when possible."""
+        try:
+            route = conf.route.route("1.1.1.1")
+            if route and route[0]:
+                return str(route[0])
+        except Exception:
+            pass
+
+        try:
+            if conf.iface:
+                return str(conf.iface)
+        except Exception:
+            pass
+
+        return None
+
+    def reset_capture_data(self):
+        """Clear stored packets and statistics so each capture reflects a fresh sample."""
+        self.packets = []
+        self.packet_stats = {
+            "total_packets": 0,
+            "total_bytes": 0,
+            "protocols": defaultdict(int),
+            "ports": defaultdict(int),
+        }
     
-    async def capture_packets(self, interface: str = None, count: int = 100, timeout: int = 10):
+    async def capture_packets(self, interface: str = None, count: int = 0, timeout: int = 10):
         """
         Capture packets from network interface using Scapy.
         
@@ -37,18 +83,23 @@ class PacketCaptureService:
             List of captured packets
         """
         try:
+            self.reset_capture_data()
+
             # Callback function to process each packet
             def packet_callback(packet):
                 self._process_packet(packet)
             
             # Start packet capture
-            packets = sniff(
-                iface=interface,
-                prn=packet_callback,
-                count=count,
-                timeout=timeout,
-                store=True
-            )
+            sniff_kwargs = {
+                "iface": interface,
+                "prn": packet_callback,
+                "timeout": timeout,
+                "store": True,
+            }
+            if count and count > 0:
+                sniff_kwargs["count"] = count
+
+            packets = sniff(**sniff_kwargs)
             
             return self._format_packets(packets)
         
@@ -84,6 +135,35 @@ class PacketCaptureService:
     def _process_packet(self, packet):
         """Process and store packet information"""
         packet_info = self._extract_packet_info(packet)
+        self._store_packet(packet_info, len(packet))
+
+    def record_proxy_observation(
+        self,
+        source_ip: Optional[str],
+        destination_host: Optional[str],
+        destination_port: Optional[int],
+        request_bytes: int = 0,
+    ) -> Dict[str, Any]:
+        """Record a packet-like observation from the local HTTP/HTTPS proxy."""
+        packet_info = {
+            "timestamp": datetime.now().isoformat(),
+            "size_bytes": max(request_bytes, 0),
+            "source_ip": source_ip,
+            "dest_ip": self._resolve_host_ip(destination_host),
+            "protocol": "TCP",
+            "application_protocol": "HTTP_PROXY",
+            "source_port": None,
+            "dest_port": destination_port,
+            "flags": [],
+            "dns_query": None,
+            "dns_query_type": None,
+            "observed_host": destination_host.lower() if destination_host else None,
+        }
+        self._store_packet(packet_info, packet_info["size_bytes"])
+        return packet_info
+
+    def _store_packet(self, packet_info: Dict[str, Any], packet_size: int) -> None:
+        """Persist a packet-like observation and update aggregate stats."""
         
         # Store packet (maintain max limit)
         if len(self.packets) >= self.max_packets:
@@ -93,21 +173,14 @@ class PacketCaptureService:
         
         # Update statistics
         self.packet_stats["total_packets"] += 1
-        self.packet_stats["total_bytes"] += len(packet)
-        
-        if IP in packet:
-            ip_layer = packet[IP]
-            protocol = ip_layer.proto
-            proto_name = self._get_protocol_name(protocol)
-            self.packet_stats["protocols"][proto_name] += 1
-        
-        # Track ports
-        if TCP in packet:
-            dst_port = packet[TCP].dport
-            self.packet_stats["ports"][dst_port] += 1
-        elif UDP in packet:
-            dst_port = packet[UDP].dport
-            self.packet_stats["ports"][dst_port] += 1
+        self.packet_stats["total_bytes"] += packet_size
+
+        protocol_name = packet_info.get("protocol", "Unknown")
+        self.packet_stats["protocols"][protocol_name] += 1
+
+        destination_port = packet_info.get("dest_port")
+        if destination_port:
+            self.packet_stats["ports"][destination_port] += 1
     
     def _extract_packet_info(self, packet) -> Dict[str, Any]:
         """Extract relevant information from a packet"""
@@ -123,6 +196,7 @@ class PacketCaptureService:
             "flags": [],
             "dns_query": None,
             "dns_query_type": None,
+            "observed_host": None,
         }
         
         # IP layer
@@ -157,6 +231,10 @@ class PacketCaptureService:
             dns_query, dns_query_type = self._extract_dns_query(packet)
             packet_info["dns_query"] = dns_query
             packet_info["dns_query_type"] = dns_query_type
+
+        observed_host = self._extract_observed_host(packet)
+        if observed_host:
+            packet_info["observed_host"] = observed_host
         
         return packet_info
     
@@ -208,6 +286,43 @@ class PacketCaptureService:
             "top_ports": self._get_top_ports(10),
             "stored_packets": len(self.packets)
         }
+
+    def get_proxy_clients(self, limit: int = 5) -> List[Dict[str, Any]]:
+        """Summarize client devices observed through the local mobile proxy."""
+        clients: Dict[str, Dict[str, Any]] = {}
+
+        for packet in reversed(self.packets):
+            if packet.get("application_protocol") != "HTTP_PROXY":
+                continue
+
+            source_ip = packet.get("source_ip")
+            if not source_ip:
+                continue
+
+            profile = clients.setdefault(
+                source_ip,
+                {
+                    "source_ip": source_ip,
+                    "request_count": 0,
+                    "last_seen": packet.get("timestamp"),
+                    "last_host": packet.get("observed_host"),
+                    "last_destination_ip": packet.get("dest_ip"),
+                    "last_destination_port": packet.get("dest_port"),
+                },
+            )
+
+            profile["request_count"] += 1
+
+            if packet.get("timestamp") and (
+                not profile.get("last_seen")
+                or packet["timestamp"] > profile["last_seen"]
+            ):
+                profile["last_seen"] = packet["timestamp"]
+                profile["last_host"] = packet.get("observed_host")
+                profile["last_destination_ip"] = packet.get("dest_ip")
+                profile["last_destination_port"] = packet.get("dest_port")
+
+        return list(clients.values())[:limit]
     
     def _get_top_ports(self, limit: int = 10) -> Dict[int, int]:
         """Get top N ports by traffic"""
@@ -275,3 +390,129 @@ class PacketCaptureService:
             pass
 
         return None, None
+
+    @staticmethod
+    def _extract_observed_host(packet) -> Optional[str]:
+        """Extract a hostname indicator from plaintext HTTP or TLS SNI."""
+        try:
+            if Raw not in packet:
+                return None
+
+            payload = bytes(packet[Raw].load)
+            if not payload:
+                return None
+
+            http_host = PacketCaptureService._extract_http_host(payload)
+            if http_host:
+                return http_host
+
+            tls_sni = PacketCaptureService._extract_tls_sni(payload)
+            if tls_sni:
+                return tls_sni
+        except Exception:
+            return None
+
+        return None
+
+    @staticmethod
+    def _resolve_host_ip(host: Optional[str]) -> Optional[str]:
+        if not host:
+            return None
+
+        try:
+            return socket.gethostbyname(host)
+        except OSError:
+            return None
+
+    @staticmethod
+    def _extract_http_host(payload: bytes) -> Optional[str]:
+        try:
+            if not (
+                payload.startswith(b"GET ")
+                or payload.startswith(b"POST ")
+                or payload.startswith(b"HEAD ")
+                or payload.startswith(b"PUT ")
+                or payload.startswith(b"OPTIONS ")
+            ):
+                return None
+
+            text = payload.decode("utf-8", errors="ignore")
+            for line in text.split("\r\n"):
+                if line.lower().startswith("host:"):
+                    return line.split(":", 1)[1].strip().lower()
+        except Exception:
+            return None
+
+        return None
+
+    @staticmethod
+    def _extract_tls_sni(payload: bytes) -> Optional[str]:
+        """
+        Best-effort TLS ClientHello SNI parser.
+        Works for common single-packet ClientHello records.
+        """
+        try:
+            if len(payload) < 5 or payload[0] != 0x16:
+                return None
+
+            record_length = int.from_bytes(payload[3:5], "big")
+            record_end = min(len(payload), 5 + record_length)
+            handshake = payload[5:record_end]
+            if len(handshake) < 42 or handshake[0] != 0x01:
+                return None
+
+            offset = 4
+            offset += 2  # client version
+            offset += 32  # random
+
+            if offset >= len(handshake):
+                return None
+
+            session_id_len = handshake[offset]
+            offset += 1 + session_id_len
+            if offset + 2 > len(handshake):
+                return None
+
+            cipher_suites_len = int.from_bytes(handshake[offset:offset + 2], "big")
+            offset += 2 + cipher_suites_len
+            if offset >= len(handshake):
+                return None
+
+            compression_methods_len = handshake[offset]
+            offset += 1 + compression_methods_len
+            if offset + 2 > len(handshake):
+                return None
+
+            extensions_len = int.from_bytes(handshake[offset:offset + 2], "big")
+            offset += 2
+            extensions_end = min(len(handshake), offset + extensions_len)
+
+            while offset + 4 <= extensions_end:
+                ext_type = int.from_bytes(handshake[offset:offset + 2], "big")
+                ext_len = int.from_bytes(handshake[offset + 2:offset + 4], "big")
+                ext_data_start = offset + 4
+                ext_data_end = ext_data_start + ext_len
+                if ext_data_end > extensions_end:
+                    break
+
+                if ext_type == 0x0000 and ext_len >= 5:
+                    server_name_list_len = int.from_bytes(handshake[ext_data_start:ext_data_start + 2], "big")
+                    name_offset = ext_data_start + 2
+                    name_list_end = min(ext_data_end, name_offset + server_name_list_len)
+
+                    while name_offset + 3 <= name_list_end:
+                        name_type = handshake[name_offset]
+                        name_len = int.from_bytes(handshake[name_offset + 1:name_offset + 3], "big")
+                        name_start = name_offset + 3
+                        name_end = name_start + name_len
+                        if name_end > name_list_end:
+                            break
+                        if name_type == 0:
+                            return handshake[name_start:name_end].decode("utf-8", errors="ignore").lower()
+                        name_offset = name_end
+
+                offset = ext_data_end
+        except Exception:
+            return None
+
+        return None

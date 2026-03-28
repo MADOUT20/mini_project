@@ -13,6 +13,7 @@ import {
   startPacketCapture,
   type Packet,
   type PacketStatistics,
+  type StartCaptureResponse,
   type TrafficProtocolResponse,
   type TrafficStats,
 } from "@/lib/api"
@@ -106,9 +107,11 @@ export function TrafficPanel() {
 export function TrafficChartPanel() {
   const [summary, setSummary] = useState<TrafficStats | null>(null)
   const [stats, setStats] = useState<PacketStatistics | null>(null)
+  const [lastCapture, setLastCapture] = useState<StartCaptureResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [capturing, setCapturing] = useState(false)
   const [error, setError] = useState("")
+  const displayedPacketCount = stats?.total_packets ?? lastCapture?.packets_captured ?? 0
 
   const fetchStats = async () => {
     try {
@@ -139,8 +142,14 @@ export function TrafficChartPanel() {
     setError("")
 
     try {
-      await startPacketCapture(50, 5)
+      const result = await startPacketCapture(0, 10)
+      setLastCapture(result)
       await fetchStats()
+      if (result.packets_captured === 0) {
+        setError(
+          `No packets were captured on interface ${result.interface}. Reload or open the target site during the 10-second capture window.`,
+        )
+      }
     } catch (err) {
       console.error("Packet capture failed:", err)
       const message =
@@ -152,7 +161,7 @@ export function TrafficChartPanel() {
         )
       } else if (message.includes("Npcap") || message.includes("Administrator PowerShell") || message.includes("WinPcap")) {
         setError(
-          "Packet capture on Windows needs Npcap and an Administrator PowerShell. Use .\\scripts\\dev-local-capture.ps1 on the demo machine.",
+          "Packet capture on Windows needs Npcap and an Administrator PowerShell. Use .\\scripts\\dev-local-capture.ps1 on the Windows machine.",
         )
       } else {
         setError(message)
@@ -164,16 +173,16 @@ export function TrafficChartPanel() {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <CardTitle className="flex items-center gap-2">
           <Activity className="h-5 w-5" />
           Network Activity
         </CardTitle>
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="secondary" onClick={handleCapture} disabled={capturing}>
-            {capturing ? "Capturing..." : "Capture 50"}
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <Button size="sm" variant="secondary" onClick={handleCapture} disabled={capturing} className="flex-1 sm:flex-none">
+            {capturing ? "Capturing..." : "Capture 10s"}
           </Button>
-          <Button size="sm" variant="ghost" onClick={fetchStats}>
+          <Button size="sm" variant="ghost" onClick={fetchStats} className="sm:flex-none">
             <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
@@ -190,26 +199,34 @@ export function TrafficChartPanel() {
                 {error}
               </div>
             )}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="rounded bg-blue-50 p-3">
+            {lastCapture && !error && (
+              <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                Captured {lastCapture.packets_captured} packet(s) on {lastCapture.interface}.
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Start capture, then open or hard-reload the target site during the 10-second window.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl bg-blue-50 p-4">
                 <p className="text-sm text-slate-600">Total Packets</p>
                 <p className="text-2xl font-bold text-blue-600">
-                  {(stats?.total_packets || 0).toLocaleString()}
+                  {displayedPacketCount.toLocaleString()}
                 </p>
               </div>
-              <div className="rounded bg-green-50 p-3">
+              <div className="rounded-2xl bg-green-50 p-4">
                 <p className="text-sm text-slate-600">Total Bytes</p>
                 <p className="text-2xl font-bold text-green-600">
                   {formatBytes(stats?.total_bytes || 0)}
                 </p>
               </div>
-              <div className="rounded bg-purple-50 p-3">
+              <div className="rounded-2xl bg-purple-50 p-4">
                 <p className="text-sm text-slate-600">Avg Packet Size</p>
                 <p className="text-2xl font-bold text-purple-600">
                   {(summary?.average_packet_size || stats?.average_packet_size || 0).toFixed(0)} B
                 </p>
               </div>
-              <div className="rounded bg-orange-50 p-3">
+              <div className="rounded-2xl bg-orange-50 p-4">
                 <p className="text-sm text-slate-600">Packets/sec</p>
                 <p className="text-2xl font-bold text-orange-600">
                   {(summary?.packets_per_second || 0).toLocaleString()}
@@ -264,7 +281,7 @@ export function PacketInspectionPanel() {
             packets.slice(0, 10).map((packet, index) => (
               <div
                 key={`${packet.timestamp}-${index}`}
-                className="rounded border border-slate-200 bg-slate-50 p-2 text-xs"
+                className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -283,6 +300,11 @@ export function PacketInspectionPanel() {
                 {packet.dns_query && (
                   <p className="mt-1 text-slate-500">
                     DNS Query: {packet.dns_query}
+                  </p>
+                )}
+                {packet.observed_host && (
+                  <p className="mt-1 text-slate-500">
+                    Host Indicator: {packet.observed_host}
                   </p>
                 )}
               </div>

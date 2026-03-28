@@ -77,16 +77,21 @@ if (-not (Test-FrontendReady)) {
 
 $ShellExe = Get-ShellExecutable
 $BackendPython = if (Test-Path $BackendVenvPython) { $BackendVenvPython } else { "python" }
-$FrontendCommand = if (Get-Command pnpm -ErrorAction SilentlyContinue) { "pnpm dev" } else { "npm run dev" }
+$FrontendNext = Join-Path $FrontendDir "node_modules\.bin\next.cmd"
+
+if (-not (Test-Path $FrontendNext)) {
+  throw "Next.js local binary is missing. Run .\scripts\setup-local.ps1 first."
+}
 
 $EscapedBackendDir = Escape-SingleQuotes $BackendDir
 $EscapedFrontendDir = Escape-SingleQuotes $FrontendDir
 $EscapedBackendPython = Escape-SingleQuotes $BackendPython
 $EscapedBackendApiUrl = Escape-SingleQuotes $BackendApiUrl
 $EscapedAllowedOrigins = Escape-SingleQuotes $AllowedOrigins
+$EscapedFrontendNext = Escape-SingleQuotes $FrontendNext
 
 $BackendCommand = "& { Set-Location '$EscapedBackendDir'; `$env:ALLOWED_ORIGINS='$EscapedAllowedOrigins'; & '$EscapedBackendPython' -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload }"
-$FrontendCommandBlock = "& { Set-Location '$EscapedFrontendDir'; `$env:BACKEND_API_URL='$EscapedBackendApiUrl'; `$env:NEXT_PUBLIC_API_URL='$EscapedBackendApiUrl'; $FrontendCommand }"
+$FrontendCommandBlock = "& { Set-Location '$EscapedFrontendDir'; `$env:BACKEND_API_URL='$EscapedBackendApiUrl'; `$env:NEXT_PUBLIC_API_URL='$EscapedBackendApiUrl'; & '$EscapedFrontendNext' dev --turbo --hostname 0.0.0.0 --port 3000 }"
 
 Start-Process -FilePath $ShellExe -ArgumentList @("-NoExit", "-Command", $BackendCommand) -WorkingDirectory $BackendDir | Out-Null
 Start-Process -FilePath $ShellExe -ArgumentList @("-NoExit", "-Command", $FrontendCommandBlock) -WorkingDirectory $FrontendDir | Out-Null

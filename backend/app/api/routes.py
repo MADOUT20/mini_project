@@ -9,12 +9,14 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 import os
 from app.services.packet_capture import PacketCaptureService
+from app.services.mobile_proxy import MobileProxyService
 from app.services.threat_detection import ThreatDetectionService
 from app.services.traffic_analysis import TrafficAnalysisService
 
 # ===== Initialize Services =====
 packet_service = PacketCaptureService()
 threat_service = ThreatDetectionService()
+proxy_service = MobileProxyService(packet_service, threat_service)
 traffic_service = TrafficAnalysisService()
 
 # ===== Request/Response Models =====
@@ -189,23 +191,18 @@ async def get_threats(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@threats_router.post("/demo")
-async def generate_demo_threat(
-    scenario: str = Query(
-        "random",
-        description="Demo scenario: random, dns, beaconing, exfiltration, all",
-    )
-):
-    """Generate safe demo threats for the dashboard."""
+@threats_router.get("/hunt")
+async def hunt_threats(limit: int = Query(5, ge=1, le=10, description="Maximum number of findings to return")):
+    """Return the strongest confirmed threat or suspicious live lead from captured packets."""
     try:
-        result = await threat_service.generate_demo_threat(scenario)
+        packets = packet_service.packets
+        stats = await packet_service.get_packet_statistics()
+        hunt_results = await threat_service.hunt_live_threats(packets, stats, limit=limit)
 
-        if result.get("success"):
-            return result
-
-        raise HTTPException(status_code=400, detail=result.get("error", "Failed to generate demo threat"))
-    except HTTPException:
-        raise
+        return {
+            "status": "success",
+            **hunt_results,
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -288,6 +285,14 @@ async def get_packets(limit: int = 100, offset: int = 0):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@packets_router.get("/interfaces")
+async def get_capture_interfaces():
+    """Return available capture interfaces and the current default."""
+    try:
+        return packet_service.get_available_interfaces()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @packets_router.post("/filter")
 async def filter_packets(
     source_ip: Optional[str] = None,
@@ -360,7 +365,11 @@ async def start_capture(
 ):
     """Start packet capture"""
     try:
-        capture_interface = interface or os.getenv("CAPTURE_INTERFACE")
+        capture_interface = (
+            interface
+            or os.getenv("CAPTURE_INTERFACE")
+            or packet_service.get_preferred_interface()
+        )
         packets = await packet_service.capture_packets(
             interface=capture_interface,
             count=count,
@@ -409,6 +418,41 @@ async def get_packet_statistics():
 
 # ===== ADMIN ROUTES =====
 admin_router = APIRouter(prefix="/api/admin", tags=["Admin"])
+
+@admin_router.get("/proxy-status")
+async def get_proxy_status():
+    """Return local proxy status for mobile testing."""
+    proxy_port = int(os.getenv("PROXY_PORT", "8888"))
+    return {
+        "enabled": os.getenv("PROXY_ENABLED", "0").lower() in {"1", "true", "yes", "on"},
+        "host": os.getenv("PROXY_HOST", "0.0.0.0"),
+        "port": proxy_port,
+        "listening": proxy_service.server is not None,
+        "clients": proxy_service.get_active_clients(),
+        "timestamp": datetime.now().isoformat(),
+    }
+
+@admin_router.get("/blocked-sites")
+async def get_blocked_sites():
+    """Return domains currently blocked by proxy response actions."""
+    return {
+        "blocked_sites": threat_service.get_blocked_domains(),
+        "count": len(threat_service.blocked_domains),
+        "timestamp": datetime.now().isoformat(),
+    }
+
+@admin_router.delete("/blocked-sites")
+async def clear_blocked_sites():
+    """Clear every blocked website rule from the proxy."""
+    return threat_service.clear_blocked_domains()
+
+@admin_router.delete("/blocked-sites/{domain}")
+async def unblock_site(domain: str):
+    """Remove a single blocked website rule from the proxy."""
+    result = threat_service.unblock_domain(domain)
+    if result.get("success"):
+        return result
+    raise HTTPException(status_code=404, detail=result.get("error"))
 
 @admin_router.get("/dashboard")
 async def admin_dashboard():

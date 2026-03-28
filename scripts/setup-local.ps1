@@ -93,6 +93,9 @@ if (-not (Test-Path $BackendEnv)) {
     "BACKEND_HOST=0.0.0.0"
     "BACKEND_PORT=8000"
     "ENVIRONMENT=development"
+    "# Format: domain or domain=SEVERITY"
+    "KNOWN_MALICIOUS_DOMAINS="
+    "KNOWN_MALICIOUS_IPS="
   ) | Set-Content -Path $BackendEnv
 }
 

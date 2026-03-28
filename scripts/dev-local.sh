@@ -8,10 +8,22 @@ FRONTEND_DIR="$ROOT_DIR/frontend"
 BACKEND_VENV_PYTHON="$BACKEND_DIR/.venv/bin/python"
 BACKEND_API_URL="${BACKEND_API_URL:-http://localhost:8000}"
 ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-http://localhost:3000}"
+FRONTEND_HOST="${FRONTEND_HOST:-127.0.0.1}"
+FRONTEND_PORT="${FRONTEND_PORT:-3000}"
 
 cleanup_done=0
 backend_pid=""
 frontend_pid=""
+
+get_lan_ip() {
+  for iface in en0 en1 bridge100; do
+    if ipconfig getifaddr "$iface" >/dev/null 2>&1; then
+      ipconfig getifaddr "$iface"
+      return 0
+    fi
+  done
+  return 1
+}
 
 cleanup() {
   if [ "$cleanup_done" -eq 1 ]; then
@@ -67,10 +79,12 @@ if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
   exit 1
 fi
 
-if command -v pnpm >/dev/null 2>&1; then
-  frontend_cmd=(pnpm dev)
+if [ -x "$FRONTEND_DIR/node_modules/.bin/next" ]; then
+  frontend_cmd=("$FRONTEND_DIR/node_modules/.bin/next" dev --turbo --hostname "$FRONTEND_HOST" --port "$FRONTEND_PORT")
 else
-  frontend_cmd=(npm run dev)
+  echo "Next.js local binary is missing."
+  echo "Run ./scripts/setup-local.sh first."
+  exit 1
 fi
 
 echo "Starting backend on http://localhost:8000"
@@ -98,6 +112,7 @@ echo "Press Ctrl+C to stop both processes."
 echo
 echo "Note: packet capture on macOS may still need admin permissions."
 echo "If sniffing fails locally, the UI still works, but packet capture may need Docker or elevated privileges."
+echo "Phone traffic only appears in captures if the phone is routing traffic through this machine."
 
 while kill -0 "$backend_pid" 2>/dev/null && kill -0 "$frontend_pid" 2>/dev/null; do
   sleep 1

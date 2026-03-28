@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Bell, User } from "lucide-react"
+import { Bell, Menu, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -32,9 +32,10 @@ const tabLabels: Record<string, string> = {
 interface DashboardHeaderProps {
   activeTab: string
   onTabChange?: (tab: string) => void
+  onMenuClick?: () => void
 }
 
-export function DashboardHeader({ activeTab, onTabChange }: DashboardHeaderProps) {
+export function DashboardHeader({ activeTab, onTabChange, onMenuClick }: DashboardHeaderProps) {
   const [profileOpen, setProfileOpen] = useState(false)
   const [user, setUser] = useState<AppUser | null>(null)
   const [archivedAlerts, setArchivedAlerts] = useState<Notification[]>([])
@@ -78,16 +79,25 @@ export function DashboardHeader({ activeTab, onTabChange }: DashboardHeaderProps
   }, [])
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-border bg-card px-6">
-      <div className="flex items-center gap-4">
-        <h1 className="text-lg font-semibold text-foreground">
+    <header className="flex min-h-16 items-center justify-between gap-3 border-b border-border bg-card px-4 py-3 sm:px-6">
+      <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0 md:hidden"
+          onClick={onMenuClick}
+        >
+          <Menu className="h-5 w-5" />
+          <span className="sr-only">Open navigation</span>
+        </Button>
+        <h1 className="truncate text-base font-semibold text-foreground sm:text-lg">
           {tabLabels[activeTab] || "Dashboard"}
         </h1>
         <Badge variant="outline" className="hidden sm:inline-flex text-xs border-emerald-500/30 text-emerald-500">
           System Online
         </Badge>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
         <ThemeToggle />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

@@ -6,13 +6,14 @@ import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { StatCards } from "@/components/dashboard/stat-cards"
 import { TrafficChartPanel, PacketInspectionPanel, TrafficAnalysisPanel } from "@/components/dashboard/traffic"
-import { ThreatDetectionPanel, ThreatResponsePanel, OSProtection } from "@/components/dashboard/threats"
+import { BlockedSitesCard, ObservedDevicesCard, ThreatDetectionPanel, ThreatResponsePanel, OSProtection } from "@/components/dashboard/threats"
 import { SettingsPanel, AdminPanel, ActionLogs } from "@/components/dashboard/admin"
 import { AlertNotifications, NotificationArchive } from "@/components/dashboard/alerts"
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState("overview")
   const [healthData, setHealthData] = useState<HealthCheckResponse | null>(null)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   useEffect(() => {
     const fetchHealthData = async () => {
@@ -28,24 +29,37 @@ export default function DashboardPage() {
   }, [])
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <DashboardSidebar activeTab={activeTab} onTabChange={setActiveTab} />
+    <div className="flex min-h-screen overflow-hidden bg-background">
+      <DashboardSidebar
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        mobileOpen={mobileNavOpen}
+        onMobileOpenChange={setMobileNavOpen}
+      />
       <div className="flex flex-1 flex-col overflow-hidden">
-        <DashboardHeader activeTab={activeTab} onTabChange={setActiveTab} />
-        <main className="flex-1 overflow-y-auto p-6 space-y-6">
+        <DashboardHeader
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          onMenuClick={() => setMobileNavOpen(true)}
+        />
+        <main className="flex-1 space-y-6 overflow-y-auto p-4 sm:p-6">
           {activeTab === "overview" && (
             <>
               <StatCards healthData={healthData} />
-              <div className="grid gap-4 lg:grid-cols-3">
+              <div className="grid gap-4 xl:grid-cols-3">
                 <div className="lg:col-span-2">
                   <TrafficChartPanel />
                 </div>
-                <ThreatDetectionPanel />
+                <div className="space-y-4">
+                  <ObservedDevicesCard />
+                  <ThreatDetectionPanel />
+                </div>
               </div>
               <div className="grid gap-4 lg:grid-cols-2">
                 <ThreatResponsePanel />
                 <AlertNotifications />
               </div>
+              <BlockedSitesCard />
             </>
           )}
           {activeTab === "packets" && (
@@ -69,6 +83,7 @@ export default function DashboardPage() {
                 <ThreatResponsePanel />
                 <AlertNotifications />
               </div>
+              <BlockedSitesCard />
               <OSProtection />
             </>
           )}

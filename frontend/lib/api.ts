@@ -35,6 +35,16 @@ export interface PacketStatistics {
   stored_packets: number
 }
 
+export interface StartCaptureResponse {
+  capture_id: string
+  status: string
+  interface: string
+  packets_captured: number
+  count: number
+  timeout: number
+  timestamp: string
+}
+
 export interface Threat {
   id: string
   type: string
@@ -45,7 +55,12 @@ export interface Threat {
   timestamp: string
   status: string
   action_taken?: string
-  demo?: boolean
+  classification?: "confirmed" | "lead"
+  destination_ip?: string
+  destination_host?: string
+  destination_port?: number
+  packet_count?: number
+  evidence?: string[]
 }
 
 export interface Packet {
@@ -60,6 +75,7 @@ export interface Packet {
   flags?: string[]
   dns_query?: string | null
   dns_query_type?: string | null
+  observed_host?: string | null
 }
 
 export interface Notification {
@@ -80,11 +96,14 @@ export interface ThreatActionResponse {
   status: string
 }
 
-export interface DemoThreatResponse {
-  success: boolean
-  scenario: string
-  threats_created: number
-  threats: Threat[]
+export interface ThreatHuntResponse {
+  status: string
+  packets_analyzed: number
+  confirmed_findings: number
+  suspicious_leads: number
+  best_finding: Threat | null
+  findings: Threat[]
+  timestamp: string
 }
 
 export interface User {
@@ -118,6 +137,36 @@ export interface TrafficConnectionsSummary {
 export interface AdminTrafficSummary {
   summary: TrafficStats
   connections: TrafficConnectionsSummary
+  timestamp: string
+}
+
+export interface ProxyClient {
+  source_ip: string
+  request_count: number
+  last_seen?: string
+  last_host?: string | null
+  last_destination_ip?: string | null
+  last_destination_port?: number | null
+}
+
+export interface ProxyStatus {
+  enabled: boolean
+  host: string
+  port: number
+  listening: boolean
+  clients: ProxyClient[]
+  timestamp: string
+}
+
+export interface BlockedSite {
+  domain: string
+  blocked_at?: string
+  reason?: string
+}
+
+export interface BlockedSitesResponse {
+  blocked_sites: BlockedSite[]
+  count: number
   timestamp: string
 }
 
@@ -232,12 +281,9 @@ export async function getThreats(
   )
 }
 
-export async function generateDemoThreat(scenario = "random"): Promise<DemoThreatResponse> {
-  return apiRequest<DemoThreatResponse>(
-    buildUrl("/api/threats/demo", { scenario }),
-    {
-      method: "POST",
-    },
+export async function getThreatHunt(limit = 5): Promise<ThreatHuntResponse> {
+  return apiRequest<ThreatHuntResponse>(
+    buildUrl("/api/threats/hunt", { limit }),
   )
 }
 
@@ -292,9 +338,13 @@ export async function getPacketStatistics(): Promise<PacketStatistics> {
   return apiRequest<PacketStatistics>("/api/packets/statistics")
 }
 
-export async function startPacketCapture(count = 100, timeout = 10) {
-  return apiRequest(
-    buildUrl("/api/packets/capture/start", { count, timeout }),
+export async function startPacketCapture(
+  count = 100,
+  timeout = 10,
+  interfaceName?: string,
+): Promise<StartCaptureResponse> {
+  return apiRequest<StartCaptureResponse>(
+    buildUrl("/api/packets/capture/start", { count, timeout, interface: interfaceName }),
     {
       method: "POST",
     },
@@ -337,6 +387,29 @@ export async function getThreatssSummary() {
 
 export async function getTrafficSummary(): Promise<AdminTrafficSummary> {
   return apiRequest<AdminTrafficSummary>("/api/admin/traffic-summary")
+}
+
+export async function getProxyStatus(): Promise<ProxyStatus> {
+  return apiRequest<ProxyStatus>("/api/admin/proxy-status")
+}
+
+export async function getBlockedSites(): Promise<BlockedSitesResponse> {
+  return apiRequest<BlockedSitesResponse>("/api/admin/blocked-sites")
+}
+
+export async function unblockSite(domain: string): Promise<{ success: boolean; message: string; domain: string }> {
+  return apiRequest<{ success: boolean; message: string; domain: string }>(
+    `/api/admin/blocked-sites/${encodeURIComponent(domain)}`,
+    {
+      method: "DELETE",
+    },
+  )
+}
+
+export async function clearBlockedSites(): Promise<{ success: boolean; message: string; cleared_domains: string[] }> {
+  return apiRequest<{ success: boolean; message: string; cleared_domains: string[] }>("/api/admin/blocked-sites", {
+    method: "DELETE",
+  })
 }
 
 // ===== NOTIFICATIONS ENDPOINTS =====
