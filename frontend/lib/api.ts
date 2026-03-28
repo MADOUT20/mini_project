@@ -115,7 +115,10 @@ export interface User {
 export interface AdminDashboard {
   total_packets: number
   total_threats: number
+  medium_threats: number
+  high_alert_threats: number
   critical_threats: number
+  low_threats?: number
   system_health: string
   uptime_percent: number
   packet_stats: PacketStatistics
@@ -227,14 +230,20 @@ function buildUrl(path: string, params?: Record<string, string | number | undefi
 }
 
 async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(path, {
-    cache: "no-store",
-    ...init,
-    headers: {
-      ...DEFAULT_HEADERS,
-      ...(init.headers || {}),
-    },
-  })
+  let response: Response
+
+  try {
+    response = await fetch(path, {
+      cache: "no-store",
+      ...init,
+      headers: {
+        ...DEFAULT_HEADERS,
+        ...(init.headers || {}),
+      },
+    })
+  } catch (error) {
+    throw new APIError(0, "Unable to reach the backend right now. Make sure capture mode is still running.")
+  }
 
   return handleResponse<T>(response)
 }

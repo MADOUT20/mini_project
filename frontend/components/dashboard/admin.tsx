@@ -13,10 +13,14 @@ import {
   deleteUser,
   getAdminDashboard,
   getAdminSettings,
+  getNotifications,
   getUsers,
+  type Notification,
   type User,
   updateAdminSettings,
 } from "@/lib/api"
+
+const DASHBOARD_REFRESH_EVENT = "chaosfaction:dashboard-refresh"
 
 export function SettingsPanel() {
   const [settings, setSettings] = useState<any>({})
@@ -270,29 +274,33 @@ export function StatsOverview() {
             <p className="text-2xl font-bold text-blue-600">{(stats.total_packets || 0).toLocaleString()}</p>
             <p className="text-xs text-slate-600">Packets Captured</p>
           </div>
-          <div className={`p-3 rounded ${stats.critical_threats > 0 ? "bg-red-50" : "bg-green-50"}`}>
-            <p className={`text-2xl font-bold ${stats.critical_threats > 0 ? "text-red-600" : "text-green-600"}`}>
+          <div className={`p-3 rounded ${stats.high_alert_threats > 0 ? "bg-red-50" : stats.medium_threats > 0 ? "bg-yellow-50" : "bg-green-50"}`}>
+            <p className={`text-2xl font-bold ${stats.high_alert_threats > 0 ? "text-red-600" : stats.medium_threats > 0 ? "text-yellow-600" : "text-green-600"}`}>
               {stats.total_threats || 0}
             </p>
-            <p className="text-xs text-slate-600">Threats Detected</p>
+            <p className="text-xs text-slate-600">Threats Detected (No Low)</p>
           </div>
           <div className="p-3 bg-green-50 rounded">
             <p className="text-2xl font-bold text-green-600">{stats.uptime_percent || 98}%</p>
             <p className="text-xs text-slate-600">System Uptime</p>
           </div>
-          <div className={`p-3 rounded ${stats.critical_threats > 0 ? "bg-yellow-50" : "bg-blue-50"}`}>
-            <p className={`text-2xl font-bold ${stats.critical_threats > 0 ? "text-yellow-600" : "text-blue-600"}`}>
-              {stats.critical_threats || 0}
+          <div className={`p-3 rounded ${stats.high_alert_threats > 0 ? "bg-orange-50" : "bg-blue-50"}`}>
+            <p className={`text-2xl font-bold ${stats.high_alert_threats > 0 ? "text-orange-600" : "text-blue-600"}`}>
+              {stats.high_alert_threats || 0}
             </p>
-            <p className="text-xs text-slate-600">Critical Threats</p>
+            <p className="text-xs text-slate-600">High Alert Threats</p>
           </div>
         </div>
-        {stats.system_health === "WARNING" && (
+        {stats.system_health !== "HEALTHY" && (
           <div className="p-3 bg-yellow-50 border border-yellow-200 rounded flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 text-yellow-600 mt-0.5" />
             <div>
-              <p className="text-sm font-medium text-yellow-800">System Warning</p>
-              <p className="text-xs text-yellow-700">Critical threats detected. Review immediately.</p>
+              <p className="text-sm font-medium text-yellow-800">System {stats.system_health}</p>
+              <p className="text-xs text-yellow-700">
+                {stats.high_alert_threats > 0
+                  ? "High alert threats detected. Review immediately."
+                  : "Medium-severity threats are active. Continue monitoring."}
+              </p>
             </div>
           </div>
         )}
@@ -302,10 +310,35 @@ export function StatsOverview() {
 }
 
 export function ActionLogs() {
-  const actions = [
-    { action: "Blocked Port Scan", ip: "192.168.1.100", time: "2 mins ago" },
-    { action: "Updated Filters", user: "admin", time: "1 hour ago" },
-  ]
+  const [actions, setActions] = useState<Notification[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    const fetchActions = async () => {
+      try {
+        const data = await getNotifications()
+        const liveActions = (data.notifications || []).filter((notification) => notification.type === "RESPONSE_ACTION")
+        setActions(liveActions)
+        setError("")
+      } catch (err) {
+        console.error("Failed to fetch action history:", err)
+        setError("Failed to load action history")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchActions()
+    const interval = setInterval(fetchActions, 3000)
+    const handleRefresh = () => fetchActions()
+    window.addEventListener(DASHBOARD_REFRESH_EVENT, handleRefresh)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener(DASHBOARD_REFRESH_EVENT, handleRefresh)
+    }
+  }, [])
 
   return (
     <Card>
@@ -313,14 +346,20 @@ export function ActionLogs() {
         <CardTitle>Recent Actions</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
-        {actions.map((a: any, i: number) => (
-          <div key={i} className="text-xs p-2 border-l-2 border-blue-400">
-            <p className="font-medium">{a.action}</p>
-            <p className="text-slate-500">
-              {a.ip && `IP: ${a.ip}`} {a.user && `by ${a.user}`} - {a.time}
-            </p>
-          </div>
-        ))}
+        {error && <p className="text-sm text-red-500">{error}</p>}
+        {loading && actions.length === 0 ? (
+          <p className="text-sm text-slate-500">Loading action history...</p>
+        ) : actions.length === 0 ? (
+          <p className="text-sm text-slate-500">No live response actions have been executed yet.</p>
+        ) : (
+          actions.map((action) => (
+            <div key={action.id} className="rounded border-l-2 border-blue-400 bg-slate-50 p-3 text-xs">
+              <p className="font-medium text-slate-900">{action.title}</p>
+              <p className="mt-1 text-slate-600">{action.message}</p>
+              <p className="mt-1 text-slate-400">{new Date(action.timestamp).toLocaleString()}</p>
+            </div>
+          ))
+        )}
       </CardContent>
     </Card>
   )

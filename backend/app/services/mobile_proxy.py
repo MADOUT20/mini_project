@@ -278,7 +278,7 @@ class MobileProxyService:
 
         return raw_value.strip("[] "), default_port
 
-    def get_active_clients(self, recent_seconds: int = 8) -> list[dict[str, Optional[str] | int]]:
+    def get_active_clients(self, recent_seconds: int = 15) -> list[dict[str, Optional[str] | int]]:
         cutoff = datetime.now() - timedelta(seconds=recent_seconds)
         active_clients = []
 

@@ -461,15 +461,31 @@ async def admin_dashboard():
         packets = packet_service.packets
         stats = await packet_service.get_packet_statistics()
         threats = await threat_service.detect_threats(packets, stats) if packets else []
-        
-        threat_count = len(threats)
+
+        visible_threats = [t for t in threats if t.get("severity") != "LOW"]
+        medium_threats = len([t for t in visible_threats if t.get("severity") == "MEDIUM"])
+        high_alert_threats = len(
+            [t for t in visible_threats if t.get("severity") in {"HIGH", "CRITICAL"}]
+        )
         critical_threats = len([t for t in threats if t.get("severity") == "CRITICAL"])
-        
+
+        if critical_threats > 0:
+            system_health = "WARNING"
+        elif high_alert_threats > 0:
+            system_health = "ELEVATED"
+        elif medium_threats > 0:
+            system_health = "MONITORING"
+        else:
+            system_health = "HEALTHY"
+
         return {
             "total_packets": stats.get("total_packets", 0),
-            "total_threats": threat_count,
+            "total_threats": len(visible_threats),
+            "medium_threats": medium_threats,
+            "high_alert_threats": high_alert_threats,
             "critical_threats": critical_threats,
-            "system_health": "HEALTHY" if critical_threats == 0 else "WARNING",
+            "low_threats": len([t for t in threats if t.get("severity") == "LOW"]),
+            "system_health": system_health,
             "uptime_percent": 98.5,
             "packet_stats": stats,
             "last_update": datetime.now().isoformat()

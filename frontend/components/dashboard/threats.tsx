@@ -42,6 +42,13 @@ function formatThreatType(type: string) {
   return type.replace(/_/g, " ").replace(/\b\w/g, (match) => match.toUpperCase())
 }
 
+function getSeverityRank(severity: Threat["severity"]) {
+  if (severity === "CRITICAL") return 4
+  if (severity === "HIGH") return 3
+  if (severity === "MEDIUM") return 2
+  return 1
+}
+
 function isPrivateNetworkAddress(value?: string) {
   if (!value) {
     return false
@@ -67,7 +74,11 @@ function formatThreatSource(sourceIp: string) {
   return sourceIp
 }
 
-export function ThreatDetectionPanel() {
+interface ThreatDetectionPanelProps {
+  excludeLow?: boolean
+}
+
+export function ThreatDetectionPanel({ excludeLow = false }: ThreatDetectionPanelProps) {
   const [threats, setThreats] = useState<Threat[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -110,7 +121,15 @@ export function ThreatDetectionPanel() {
     }
   }
 
-  const visibleThreats = threats.slice(0, 4)
+  const visibleThreats = threats
+    .filter((threat) => !excludeLow || threat.severity !== "LOW")
+    .sort((left, right) => {
+      const severityDifference = getSeverityRank(right.severity) - getSeverityRank(left.severity)
+      if (severityDifference !== 0) {
+        return severityDifference
+      }
+      return new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime()
+    })
 
   if (loading && threats.length === 0) {
     return (
@@ -133,7 +152,7 @@ export function ThreatDetectionPanel() {
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2">
           <AlertTriangle className="w-5 h-5 text-red-500" />
-          Threat Watch ({threats.length})
+          Threat Watch ({visibleThreats.length})
         </CardTitle>
         <Button size="sm" variant="ghost" onClick={fetchThreats}>
           <RefreshCw className="w-4 h-4" />
@@ -143,10 +162,14 @@ export function ThreatDetectionPanel() {
         {error && <div className="text-red-500 text-sm">{error}</div>}
         {message && <div className="text-sm text-slate-600">{message}</div>}
 
-        {threats.length === 0 ? (
+        {visibleThreats.length === 0 ? (
           <div className="p-3 bg-green-50 border border-green-200 rounded text-center">
-            <p className="text-sm font-medium text-green-700">No confirmed threats detected</p>
-            <p className="text-xs text-green-600">Only confirmed detections are shown here.</p>
+            <p className="text-sm font-medium text-green-700">
+              {excludeLow ? "No medium or high threats detected" : "No confirmed threats detected"}
+            </p>
+            <p className="text-xs text-green-600">
+              {excludeLow ? "Overview only shows medium, high, and critical alerts." : "Only confirmed detections are shown here."}
+            </p>
           </div>
         ) : (
           visibleThreats.map((threat) => (
@@ -293,9 +316,9 @@ export function ObservedDevicesCard() {
               </p>
               <p className="text-xs text-slate-500">
                 {hasActiveClient
-                  ? "This device sent traffic through the monitored proxy within the last few seconds."
+                  ? "This device sent traffic through the monitored proxy within the last 15 seconds."
                   : proxyListening
-                    ? "A device is marked live only when traffic is seen in the last 8 seconds."
+                    ? "A device is marked live only when traffic is seen in the last 15 seconds."
                     : "Start capture mode to watch phone traffic."}
               </p>
             </div>

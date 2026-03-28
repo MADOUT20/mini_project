@@ -12,6 +12,7 @@ from datetime import datetime
 import ipaddress
 import math
 import statistics
+from urllib.parse import urlsplit
 from dotenv import load_dotenv
 
 
@@ -88,6 +89,7 @@ class ThreatDetectionService:
             auto_detected.extend(await self._detect_statistical_anomalies(packets, traffic_stats))
             auto_detected.extend(await self._detect_port_scanning(packets))
             auto_detected.extend(await self._detect_malicious_site_visits(packets))
+            auto_detected.extend(await self._detect_unencrypted_http_activity(packets))
             auto_detected.extend(await self._detect_suspicious_host_activity(packets))
             auto_detected.extend(await self._detect_suspicious_ips(packets))
             auto_detected.extend(await self._detect_protocol_anomalies(packets))
@@ -376,6 +378,69 @@ class ThreatDetectionService:
 
         return threats
 
+    async def _detect_unencrypted_http_activity(self, packets: List[Dict]) -> List[Dict]:
+        threats = []
+        http_profiles = defaultdict(
+            lambda: {
+                "packet_count": 0,
+                "hosts": set(),
+                "destination_ips": set(),
+            }
+        )
+
+        for packet in packets:
+            source_ip = packet.get("source_ip")
+            destination_ip = packet.get("dest_ip")
+            destination_port = packet.get("dest_port")
+            observed_host = self._normalize_dns_query(packet.get("observed_host"))
+
+            if not source_ip or not self._is_private_ip(source_ip):
+                continue
+
+            if destination_port != 80:
+                continue
+
+            if destination_ip and self._is_private_ip(destination_ip):
+                continue
+
+            identifier = observed_host or destination_ip
+            if not identifier:
+                continue
+
+            profile = http_profiles[(source_ip, identifier)]
+            profile["packet_count"] += 1
+
+            if observed_host:
+                profile["hosts"].add(observed_host)
+            if destination_ip:
+                profile["destination_ips"].add(destination_ip)
+
+        for (source_ip, identifier), profile in http_profiles.items():
+            packet_count = profile["packet_count"]
+            target_host = sorted(profile["hosts"])[0] if profile["hosts"] else None
+            target_ip = sorted(profile["destination_ips"])[0] if profile["destination_ips"] else None
+            target_label = target_host or target_ip or identifier
+
+            threats.append(
+                self._build_threat(
+                    threat_type="UNENCRYPTED_HTTP_ACTIVITY",
+                    source_ip=source_ip,
+                    threat_score=min(0.66, 0.54 + min(packet_count, 4) * 0.02),
+                    description=f"Unencrypted HTTP traffic observed to {target_label}",
+                    severity="MEDIUM",
+                    destination_host=target_host,
+                    destination_ip=target_ip,
+                    destination_port=80,
+                    evidence=[
+                        f"Observed {packet_count} plaintext HTTP request event(s) from {source_ip}",
+                        "Plain HTTP exposes browsing traffic without TLS encryption and should be reviewed.",
+                    ],
+                    packet_count=packet_count,
+                )
+            )
+
+        return threats
+
     async def _detect_suspicious_host_activity(self, packets: List[Dict]) -> List[Dict]:
         threats = []
         host_hits = defaultdict(lambda: {"count": 0, "reasons": set()})
@@ -402,8 +467,16 @@ class ThreatDetectionService:
             if profile["count"] < 2 and not strong_signal:
                 continue
 
-            threat_score = min(0.78, 0.56 + (len(reasons) * 0.06))
-            severity = "HIGH" if len(reasons) >= 3 else "MEDIUM"
+            threat_score = min(
+                0.82,
+                (0.52 if strong_signal else 0.36) + (len(reasons) * 0.06) + min(profile["count"], 5) * 0.015,
+            )
+            if strong_signal and len(reasons) >= 3:
+                severity = "HIGH"
+            elif strong_signal or len(reasons) >= 3:
+                severity = "MEDIUM"
+            else:
+                severity = "LOW"
             reason_text = ", ".join(reasons)
             threats.append(
                 self._build_threat(
@@ -1502,11 +1575,11 @@ class ThreatDetectionService:
         return unique_threats
 
     def _calculate_severity(self, threat_score: float) -> str:
-        if threat_score > 0.8:
+        if threat_score >= 0.88:
             return "CRITICAL"
-        if threat_score > 0.6:
+        if threat_score >= 0.72:
             return "HIGH"
-        if threat_score > 0.4:
+        if threat_score >= 0.52:
             return "MEDIUM"
         return "LOW"
 
@@ -1655,7 +1728,7 @@ class ThreatDetectionService:
                 if severity_candidate in {"LOW", "MEDIUM", "HIGH", "CRITICAL"}:
                     severity = severity_candidate
 
-            normalized_domain = domain.lower().rstrip(".")
+            normalized_domain = self._normalize_watchlist_domain(domain)
             if not normalized_domain or normalized_domain in seen_domains:
                 continue
 
@@ -1680,6 +1753,22 @@ class ThreatDetectionService:
             seen.add(value)
             deduped.append(value)
         return deduped
+
+    @staticmethod
+    def _normalize_watchlist_domain(domain: str) -> str:
+        candidate = domain.strip()
+        if not candidate:
+            return ""
+
+        if "://" in candidate or "/" in candidate:
+            parsed = urlsplit(candidate if "://" in candidate else f"https://{candidate}")
+            candidate = parsed.hostname or candidate
+
+        candidate = candidate.lower().rstrip(".")
+        if candidate.startswith("www."):
+            candidate = candidate[4:]
+
+        return candidate
 
     def _build_watched_domain_ip_index(self, watched_domain_rules: List[Dict[str, Any]]) -> Dict[str, List[str]]:
         ip_index: Dict[str, List[str]] = defaultdict(list)

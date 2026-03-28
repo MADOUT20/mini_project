@@ -30,6 +30,8 @@ export function StatCards({ healthData }: StatCardsProps) {
   const [overview, setOverview] = useState({
     total_packets: 0,
     total_threats: 0,
+    medium_threats: 0,
+    high_alert_threats: 0,
     critical_threats: 0,
     last_update: "",
   })
@@ -46,6 +48,8 @@ export function StatCards({ healthData }: StatCardsProps) {
         setOverview({
           total_packets: dashboard.total_packets || 0,
           total_threats: dashboard.total_threats || 0,
+          medium_threats: dashboard.medium_threats || 0,
+          high_alert_threats: dashboard.high_alert_threats || 0,
           critical_threats: dashboard.critical_threats || 0,
           last_update: dashboard.last_update || "",
         })
@@ -72,10 +76,10 @@ export function StatCards({ healthData }: StatCardsProps) {
     {
       label: "Threats Detected",
       value: formatCount(overview.total_threats),
-      change: `${overview.critical_threats} critical`,
-      changeType: overview.critical_threats > 0 ? ("negative" as const) : ("positive" as const),
+      change: `${overview.high_alert_threats} high alert, ${overview.medium_threats} medium`,
+      changeType: overview.high_alert_threats > 0 ? ("negative" as const) : overview.medium_threats > 0 ? ("neutral" as const) : ("positive" as const),
       icon: ShieldAlert,
-      description: "Active detections",
+      description: "Medium and above",
     },
     {
       label: "Network Connections",

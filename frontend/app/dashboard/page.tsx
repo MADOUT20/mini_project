@@ -52,7 +52,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="space-y-4">
                   <ObservedDevicesCard />
-                  <ThreatDetectionPanel />
+                  <ThreatDetectionPanel excludeLow />
                 </div>
               </div>
               <div className="grid gap-4 lg:grid-cols-2">
