@@ -5,7 +5,7 @@ Handles real-time packet capturing and processing
 
 import os
 import socket
-from scapy.all import sniff, IP, TCP, UDP, ICMP, DNS, DNSQR, Raw, conf, get_if_list
+from scapy.all import sniff, IP, IPv6, TCP, UDP, ICMP, DNS, DNSQR, Raw, conf, get_if_list
 from typing import Dict, List, Any, Optional
 from collections import defaultdict
 from datetime import datetime
@@ -200,12 +200,19 @@ class PacketCaptureService:
             "observed_host": None,
         }
         
-        # IP layer
+        # IPv4 layer
         if IP in packet:
             ip_layer = packet[IP]
             packet_info["source_ip"] = ip_layer.src
             packet_info["dest_ip"] = ip_layer.dst
             packet_info["protocol"] = self._get_protocol_name(ip_layer.proto)
+
+        # IPv6 layer
+        elif IPv6 in packet:
+            ip_layer = packet[IPv6]
+            packet_info["source_ip"] = ip_layer.src
+            packet_info["dest_ip"] = ip_layer.dst
+            packet_info["protocol"] = "IPv6"
         
         # TCP layer
         if TCP in packet:
@@ -425,9 +432,14 @@ class PacketCaptureService:
             return None
 
         try:
-            return socket.gethostbyname(host)
+            for family, _, _, _, sockaddr in socket.getaddrinfo(host, None):
+                if family not in {socket.AF_INET, socket.AF_INET6}:
+                    continue
+                return sockaddr[0]
         except OSError:
             return None
+
+        return None
 
     @staticmethod
     def _extract_http_host(payload: bytes) -> Optional[str]:

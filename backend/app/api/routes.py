@@ -216,6 +216,9 @@ async def respond_to_threat(
         result = await threat_service.respond_to_threat(threat_id, action)
         
         if result.get("success"):
+            blocked_domain = result.get("blocked_domain")
+            if action == "BLOCK" and blocked_domain:
+                await proxy_service.drop_connections_for_domain(blocked_domain)
             return result
         raise HTTPException(status_code=404, detail=result.get("error"))
     except HTTPException:

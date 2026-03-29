@@ -38,6 +38,34 @@ function getTopProtocol(protocols: TrafficProtocolResponse["protocols"]) {
   return sortedProtocols[0] || null
 }
 
+function getPacketSourceLabel(packet: Packet) {
+  if (packet.source_ip) {
+    return packet.source_ip
+  }
+
+  if (packet.application_protocol === "HTTP_PROXY_HTTP" || packet.application_protocol === "HTTPS_TUNNEL") {
+    return "Proxy client"
+  }
+
+  return "Captured device"
+}
+
+function getPacketDestinationLabel(packet: Packet) {
+  if (packet.dest_ip) {
+    return packet.dest_ip
+  }
+
+  if (packet.observed_host) {
+    return packet.observed_host
+  }
+
+  if (packet.dns_query) {
+    return packet.dns_query
+  }
+
+  return "Captured endpoint"
+}
+
 export function TrafficPanel() {
   const [trafficData, setTrafficData] = useState<
     Array<{ protocol: string; packets: number; bytes: string; percentage: number }>
@@ -286,7 +314,7 @@ export function PacketInspectionPanel() {
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="font-medium">
-                      {packet.source_ip || "Unknown"} → {packet.dest_ip || "Unknown"}
+                      {getPacketSourceLabel(packet)} → {getPacketDestinationLabel(packet)}
                     </p>
                     <p className="text-slate-600">{packet.protocol}</p>
                   </div>

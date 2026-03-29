@@ -6,6 +6,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { AlertTriangle, ChevronLeft, ChevronRight, MapPin, RefreshCw, Shield, Smartphone, Wifi, Zap } from "lucide-react"
 import {
   clearBlockedSites,
@@ -141,7 +142,10 @@ export function ThreatDetectionPanel({ excludeLow = false }: ThreatDetectionPane
     setActiveIndex((currentIndex) => Math.min(currentIndex, visibleThreats.length - 1))
   }, [visibleThreats.length])
 
-  const activeThreat = visibleThreats[activeIndex]
+  const safeActiveIndex = visibleThreats.length > 0
+    ? Math.min(activeIndex, visibleThreats.length - 1)
+    : 0
+  const activeThreat = visibleThreats[safeActiveIndex] ?? null
 
   if (loading && threats.length === 0) {
     return (
@@ -174,7 +178,7 @@ export function ThreatDetectionPanel({ excludeLow = false }: ThreatDetectionPane
         {error && <div className="text-red-500 text-sm">{error}</div>}
         {message && <div className="text-sm text-slate-600">{message}</div>}
 
-        {visibleThreats.length === 0 ? (
+        {visibleThreats.length === 0 || !activeThreat ? (
           <div className="p-3 bg-green-50 border border-green-200 rounded text-center">
             <p className="text-sm font-medium text-green-700">
               {excludeLow ? "No medium or high threats detected" : "No confirmed threats detected"}
@@ -187,7 +191,7 @@ export function ThreatDetectionPanel({ excludeLow = false }: ThreatDetectionPane
           <>
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs text-slate-500">
-                Threat {activeIndex + 1} of {visibleThreats.length}
+                Threat {safeActiveIndex + 1} of {visibleThreats.length}
               </p>
               {visibleThreats.length > 1 && (
                 <div className="flex items-center gap-1">
@@ -196,7 +200,7 @@ export function ThreatDetectionPanel({ excludeLow = false }: ThreatDetectionPane
                     variant="outline"
                     className="h-8 w-8"
                     onClick={() => setActiveIndex((currentIndex) => Math.max(0, currentIndex - 1))}
-                    disabled={activeIndex === 0}
+                    disabled={safeActiveIndex === 0}
                   >
                     <ChevronLeft className="h-4 w-4" />
                     <span className="sr-only">Previous threat</span>
@@ -206,7 +210,7 @@ export function ThreatDetectionPanel({ excludeLow = false }: ThreatDetectionPane
                     variant="outline"
                     className="h-8 w-8"
                     onClick={() => setActiveIndex((currentIndex) => Math.min(visibleThreats.length - 1, currentIndex + 1))}
-                    disabled={activeIndex === visibleThreats.length - 1}
+                    disabled={safeActiveIndex === visibleThreats.length - 1}
                   >
                     <ChevronRight className="h-4 w-4" />
                     <span className="sr-only">Next threat</span>
@@ -337,27 +341,32 @@ export function ObservedDevicesCard() {
     return () => clearInterval(interval)
   }, [])
 
-  const latestClient = clients[0]
   const hasActiveClient = clients.length > 0
+  const activeClientCount = clients.length
 
   return (
     <Card className="border-border bg-card">
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between gap-3">
         <CardTitle className="flex items-center gap-2">
           <Wifi className="h-5 w-5" />
           Observed Devices
         </CardTitle>
+        <Badge variant="outline">{activeClientCount} live</Badge>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="rounded-2xl bg-slate-50 p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-slate-900">
-                {hasActiveClient ? "Device currently online" : proxyListening ? "Waiting for phone traffic" : "Phone proxy is offline"}
+                {hasActiveClient
+                  ? `${activeClientCount} device${activeClientCount === 1 ? "" : "s"} currently online`
+                  : proxyListening
+                    ? "Waiting for phone traffic"
+                    : "Phone proxy is offline"}
               </p>
               <p className="text-xs text-slate-500">
                 {hasActiveClient
-                  ? "This device sent traffic through the monitored proxy within the last 15 seconds."
+                  ? "These devices sent traffic through the monitored proxy within the last 15 seconds."
                   : proxyListening
                     ? "A device is marked live only when traffic is seen in the last 15 seconds."
                     : "Start capture mode to watch phone traffic."}
@@ -374,31 +383,37 @@ export function ObservedDevicesCard() {
 
         {loading ? (
           <p className="text-sm text-slate-500">Loading observed devices...</p>
-        ) : latestClient ? (
-          <div className="space-y-2 rounded-2xl border border-border bg-white/70 p-4">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Latest device</p>
-            <p className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-              <Smartphone className="h-4 w-4 text-slate-500" />
-              {latestClient.source_ip}
-            </p>
-            <p className="text-sm text-slate-600">
-              Last host: {latestClient.last_host || "Awaiting website visit"}
-            </p>
-            {latestClient.last_destination_ip && (
-              <p className="text-sm text-slate-600">
-                Last IP: {latestClient.last_destination_ip}
-                {latestClient.last_destination_port ? `:${latestClient.last_destination_port}` : ""}
-              </p>
-            )}
-            <p className="text-xs text-slate-500">
-              Requests seen: {latestClient.request_count}
-            </p>
-            {latestClient.last_seen && (
-              <p className="text-xs text-slate-500">
-                Last seen: {new Date(latestClient.last_seen).toLocaleTimeString()}
-              </p>
-            )}
-          </div>
+        ) : hasActiveClient ? (
+          <ScrollArea className="h-72 pr-3">
+            <div className="space-y-3">
+              {clients.map((client) => (
+                <div key={client.source_ip} className="space-y-2 rounded-2xl border border-border bg-white/70 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                      <Smartphone className="h-4 w-4 text-slate-500" />
+                      {client.source_ip}
+                    </p>
+                    <Badge className="bg-emerald-600">LIVE</Badge>
+                  </div>
+                  <p className="text-sm text-slate-600">
+                    Last host: {client.last_host || "Awaiting website visit"}
+                  </p>
+                  {client.last_destination_ip && (
+                    <p className="text-sm text-slate-600">
+                      Last IP: {client.last_destination_ip}
+                      {client.last_destination_port ? `:${client.last_destination_port}` : ""}
+                    </p>
+                  )}
+                  <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
+                    <span>Requests seen: {client.request_count}</span>
+                    {client.last_seen && (
+                      <span>Last seen: {new Date(client.last_seen).toLocaleTimeString()}</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
         ) : (
           <p className="text-sm text-slate-500">
             No phone traffic seen yet. Open a watched site from the phone through the proxy.

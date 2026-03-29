@@ -21,6 +21,7 @@ class MobileProxyService:
         self.host = "0.0.0.0"
         self.port = 8888
         self.client_activity: dict[str, dict[str, Optional[str] | int]] = {}
+        self.active_connections: list[dict[str, object]] = []
 
     async def start(self, host: str = "0.0.0.0", port: int = 8888) -> None:
         if self.server is not None:
@@ -128,7 +129,11 @@ class MobileProxyService:
         client_writer.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")
         await client_writer.drain()
 
-        await self._relay_bidirectional(client_reader, client_writer, remote_reader, remote_writer)
+        connection_entry = self._register_active_connection(destination_host, client_writer, remote_writer)
+        try:
+            await self._relay_bidirectional(client_reader, client_writer, remote_reader, remote_writer)
+        finally:
+            self._unregister_active_connection(connection_entry)
 
     async def _handle_http(
         self,
@@ -174,7 +179,11 @@ class MobileProxyService:
         remote_writer.write(rebuilt_request)
         await remote_writer.drain()
 
-        await self._relay_bidirectional(client_reader, client_writer, remote_reader, remote_writer)
+        connection_entry = self._register_active_connection(destination_host, client_writer, remote_writer)
+        try:
+            await self._relay_bidirectional(client_reader, client_writer, remote_reader, remote_writer)
+        finally:
+            self._unregister_active_connection(connection_entry)
 
     async def _relay_bidirectional(
         self,
@@ -311,6 +320,29 @@ class MobileProxyService:
         active_clients.sort(key=lambda item: str(item.get("last_seen", "")), reverse=True)
         return active_clients
 
+    async def drop_connections_for_domain(self, domain: Optional[str]) -> int:
+        normalized_domain = self._normalize_domain(domain)
+        if not normalized_domain:
+            return 0
+
+        dropped_connections = 0
+
+        for connection in list(self.active_connections):
+            host = self._normalize_domain(str(connection.get("destination_host") or ""))
+            if not host or not self._domain_matches(host, normalized_domain):
+                continue
+
+            dropped_connections += 1
+            for writer_key in ("client_writer", "remote_writer"):
+                writer = connection.get(writer_key)
+                if isinstance(writer, asyncio.StreamWriter):
+                    try:
+                        writer.close()
+                    except Exception:
+                        pass
+
+        return dropped_connections
+
     def _record_client_activity(
         self,
         source_ip: Optional[str],
@@ -336,6 +368,24 @@ class MobileProxyService:
         profile["last_host"] = destination_host
         profile["last_destination_ip"] = destination_ip
         profile["last_destination_port"] = destination_port
+
+    def _register_active_connection(
+        self,
+        destination_host: Optional[str],
+        client_writer: asyncio.StreamWriter,
+        remote_writer: asyncio.StreamWriter,
+    ) -> dict[str, object]:
+        connection_entry = {
+            "destination_host": self._normalize_domain(destination_host),
+            "client_writer": client_writer,
+            "remote_writer": remote_writer,
+        }
+        self.active_connections.append(connection_entry)
+        return connection_entry
+
+    def _unregister_active_connection(self, connection_entry: dict[str, object]) -> None:
+        if connection_entry in self.active_connections:
+            self.active_connections.remove(connection_entry)
 
     @staticmethod
     def _rebuild_http_request(
@@ -386,3 +436,11 @@ class MobileProxyService:
             content_type="text/html; charset=utf-8",
         )
         await writer.wait_closed()
+
+    @staticmethod
+    def _normalize_domain(value: Optional[str]) -> str:
+        return (value or "").strip().lower().rstrip(".")
+
+    @staticmethod
+    def _domain_matches(host: str, domain: str) -> bool:
+        return host == domain or host.endswith(f".{domain}")

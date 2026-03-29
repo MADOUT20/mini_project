@@ -380,6 +380,7 @@ class ThreatDetectionService:
 
     async def _detect_unencrypted_http_activity(self, packets: List[Dict]) -> List[Dict]:
         threats = []
+        watched_domains = self.threat_signatures.get("known_malicious_domains", [])
         http_profiles = defaultdict(
             lambda: {
                 "packet_count": 0,
@@ -403,18 +404,23 @@ class ThreatDetectionService:
             if not is_plain_http:
                 continue
 
+            if not observed_host:
+                continue
+
+            if self._is_benign_system_host(observed_host):
+                continue
+
+            if self._match_watched_domain(observed_host, watched_domains):
+                continue
+
             if destination_ip and self._is_private_ip(destination_ip):
                 continue
 
-            identifier = observed_host or destination_ip
-            if not identifier:
-                continue
-
+            identifier = observed_host
             profile = http_profiles[(source_ip, identifier)]
             profile["packet_count"] += 1
 
-            if observed_host:
-                profile["hosts"].add(observed_host)
+            profile["hosts"].add(observed_host)
             if destination_ip:
                 profile["destination_ips"].add(destination_ip)
             if isinstance(destination_port, int):
@@ -456,6 +462,9 @@ class ThreatDetectionService:
             source_ip = packet.get("source_ip")
             indicator = self._normalize_dns_query(packet.get("observed_host"))
             if not indicator or not source_ip or not self._is_private_ip(source_ip):
+                continue
+
+            if self._is_benign_system_host(indicator):
                 continue
 
             reasons = self._suspicious_host_reasons(indicator)
@@ -1249,6 +1258,7 @@ class ThreatDetectionService:
             "threat_id": threat_id,
             "action": action,
             "status": new_status,
+            "blocked_domain": blocked_domain if action == "BLOCK" and 'blocked_domain' in locals() else None,
         }
 
     def is_domain_blocked(self, host: Optional[str]) -> bool:
@@ -1289,6 +1299,8 @@ class ThreatDetectionService:
         if removed is None:
             return {"success": False, "error": f"{normalized_domain} is not currently blocked"}
 
+        self._release_domain_block_state(normalized_domain)
+
         now = datetime.now().isoformat()
         self._add_notification(
             title="Website Unblocked",
@@ -1307,6 +1319,8 @@ class ThreatDetectionService:
     def clear_blocked_domains(self) -> Dict[str, Any]:
         cleared_domains = sorted(self.blocked_domains.keys())
         self.blocked_domains.clear()
+        for domain in cleared_domains:
+            self._release_domain_block_state(domain)
         now = datetime.now().isoformat()
 
         self._add_notification(
@@ -1517,6 +1531,27 @@ class ThreatDetectionService:
                 return threat
         return None
 
+    def _release_domain_block_state(self, domain: str) -> None:
+        normalized_domain = self._normalize_dns_query(domain)
+        if not normalized_domain:
+            return
+
+        matching_keys = set()
+
+        for threat in self.detected_threats:
+            threat_domain = self._domain_to_block_for_threat(threat)
+            if threat_domain != normalized_domain:
+                continue
+
+            matching_keys.add(self._threat_key(threat))
+            if threat.get("status") == "blocked":
+                threat["status"] = "active"
+            threat.pop("action_taken", None)
+            threat.pop("response_time", None)
+
+        for key in matching_keys:
+            self.threat_state_overrides.pop(key, None)
+
     def _update_manual_threat(self, threat_id: str, updates: Dict[str, Any]) -> bool:
         for threat in self.manual_threats:
             if threat.get("id") == threat_id:
@@ -1692,6 +1727,54 @@ class ThreatDetectionService:
         ):
             return True
         return False
+
+    @staticmethod
+    def _is_benign_system_host(host: str) -> bool:
+        normalized_host = host.strip().lower().rstrip(".")
+        if not normalized_host:
+            return False
+
+        benign_hosts = {
+            "captive.apple.com",
+            "connectivitycheck.android.com",
+            "connectivitycheck.gstatic.com",
+            "clients3.google.com",
+            "www.msftconnecttest.com",
+            "msftconnecttest.com",
+            "detectportal.firefox.com",
+            "connect.rom.miui.com",
+            "nmcheck.gnome.org",
+            "networkcheck.kde.org",
+            "connectivitycheck.platform.hicloud.com",
+            "cp.cloudflare.com",
+        }
+        benign_suffixes = {
+            ".apple.com",
+            ".icloud.com",
+            ".mzstatic.com",
+            ".gstatic.com",
+            ".google.com",
+            ".googleapis.com",
+            ".gvt1.com",
+            ".microsoft.com",
+            ".msftconnecttest.com",
+            ".msftncsi.com",
+            ".office.com",
+            ".windows.com",
+            ".live.com",
+            ".mozilla.com",
+            ".firefox.com",
+            ".miui.com",
+            ".xiaomi.com",
+            ".hicloud.com",
+            ".samsung.com",
+            ".samsungcloud.com",
+        }
+
+        if normalized_host in benign_hosts:
+            return True
+
+        return any(normalized_host.endswith(suffix) for suffix in benign_suffixes)
 
     @staticmethod
     def _match_watched_domain(query: str, watched_domains: List[str]) -> Optional[str]:
