@@ -40,6 +40,14 @@ ensure_port_free() {
 }
 
 get_lan_ip() {
+  local default_iface=""
+
+  default_iface="$(route -n get default 2>/dev/null | awk '/interface:/{print $2; exit}')"
+  if [ -n "$default_iface" ] && ipconfig getifaddr "$default_iface" >/dev/null 2>&1; then
+    ipconfig getifaddr "$default_iface"
+    return 0
+  fi
+
   for iface in en0 en1 bridge100; do
     if ipconfig getifaddr "$iface" >/dev/null 2>&1; then
       ipconfig getifaddr "$iface"

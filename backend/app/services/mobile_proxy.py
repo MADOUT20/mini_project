@@ -165,6 +165,9 @@ class MobileProxyService:
             observation.get("dest_ip"),
         )
 
+        if await self._handle_connectivity_probe(client_writer, destination_host, request_path):
+            return
+
         if self.threat_service.is_domain_blocked(destination_host):
             await self._send_blocked_response(client_writer, destination_host)
             return
@@ -369,6 +372,72 @@ class MobileProxyService:
         profile["last_destination_ip"] = destination_ip
         profile["last_destination_port"] = destination_port
 
+    async def _handle_connectivity_probe(
+        self,
+        writer: asyncio.StreamWriter,
+        destination_host: Optional[str],
+        request_path: str,
+    ) -> bool:
+        normalized_host = self._normalize_domain(destination_host)
+        normalized_path = request_path or "/"
+
+        if normalized_host in {"connectivitycheck.gstatic.com", "connectivitycheck.android.com"}:
+            if normalized_path.startswith("/generate_204"):
+                await self._send_response(writer, 204, "No Content")
+                return True
+
+        if normalized_host in {"captive.apple.com"}:
+            body = (
+                "<HTML><HEAD><TITLE>Success</TITLE></HEAD>"
+                "<BODY>Success</BODY></HTML>"
+            )
+            await self._send_response(
+                writer,
+                200,
+                "OK",
+                body=body,
+                content_type="text/html; charset=utf-8",
+            )
+            return True
+
+        if normalized_host in {"www.msftconnecttest.com", "msftconnecttest.com"}:
+            await self._send_response(
+                writer,
+                200,
+                "OK",
+                body="Microsoft Connect Test",
+                content_type="text/plain; charset=utf-8",
+            )
+            return True
+
+        if normalized_host in {"detectportal.firefox.com"}:
+            await self._send_response(
+                writer,
+                200,
+                "OK",
+                body="success\n",
+                content_type="text/plain; charset=utf-8",
+            )
+            return True
+
+        if normalized_host in {"nmcheck.gnome.org", "networkcheck.kde.org"}:
+            await self._send_response(
+                writer,
+                204,
+                "No Content",
+            )
+            return True
+
+        if normalized_host in {"connect.rom.miui.com", "connectivitycheck.platform.hicloud.com"}:
+            await self._send_response(
+                writer,
+                204,
+                "No Content",
+            )
+            return True
+
+        return False
+
     def _register_active_connection(
         self,
         destination_host: Optional[str],
@@ -401,7 +470,7 @@ class MobileProxyService:
         return ("\r\n".join(header_lines) + "\r\n\r\n").encode("iso-8859-1", errors="ignore")
 
     @staticmethod
-    async def _send_error(
+    async def _send_response(
         writer: asyncio.StreamWriter,
         status_code: int,
         message: str,
@@ -418,6 +487,22 @@ class MobileProxyService:
         writer.write(response)
         await writer.drain()
         writer.close()
+
+    @staticmethod
+    async def _send_error(
+        writer: asyncio.StreamWriter,
+        status_code: int,
+        message: str,
+        body: Optional[str] = None,
+        content_type: str = "text/plain; charset=utf-8",
+    ) -> None:
+        await MobileProxyService._send_response(
+            writer,
+            status_code,
+            message,
+            body=body,
+            content_type=content_type,
+        )
 
     @staticmethod
     async def _send_blocked_response(writer: asyncio.StreamWriter, destination_host: str) -> None:

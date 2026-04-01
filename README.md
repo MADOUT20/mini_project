@@ -63,6 +63,9 @@ Notes for Windows:
 - the PowerShell scripts open separate backend and frontend windows
 - install `Npcap` before trying live packet capture
 - run capture mode so the backend starts with Administrator access
+- Windows capture mode also starts the local phone proxy on port `8888`
+- use the printed Windows LAN IP as the phone proxy host when testing over Wi-Fi or hotspot
+- allow the Windows Firewall/Admin prompt so the phone can actually reach the proxy
 
 ### Environment Variables
 
@@ -136,6 +139,7 @@ Important:
 - The phone does not need dashboard access.
 - The local proxy mode is the easiest way to route phone website traffic through the backend without reconfiguring your whole network.
 - HTTPS websites still work in proxy mode because the proxy records the destination host from the CONNECT request and tunnels the traffic through unchanged.
+- The same idea works on Windows capture mode too: start the capture script, copy the printed proxy IP, and use that as the phone's manual proxy host.
 
 ## 🔌 API Endpoints
 
