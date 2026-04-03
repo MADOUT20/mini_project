@@ -16,3 +16,5 @@ frontend/.env.local
 __pycache__/
 *.pyc
 .env
+info for project.txt
+info for project frontend.txt

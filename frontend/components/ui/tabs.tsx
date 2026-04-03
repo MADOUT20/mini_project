@@ -1,4 +1,5 @@
 'use client'
+// Shared shadcn/ui wrapper for the tabs component.
 
 import * as React from 'react'
 import * as TabsPrimitive from '@radix-ui/react-tabs'

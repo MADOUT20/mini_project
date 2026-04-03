@@ -1,4 +1,5 @@
 'use client'
+// Shared shadcn/ui wrapper for the toast component.
 
 import * as React from 'react'
 import * as ToastPrimitives from '@radix-ui/react-toast'

@@ -1,4 +1,5 @@
 "use client"
+// Small UI control for switching the active color theme.
 
 import { Moon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"

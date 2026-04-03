@@ -17,6 +17,8 @@ class TrafficAnalysisService:
         """
         Get traffic summary for specified time range
         """
+        # This service is mostly a dashboard summarizer. It does not decide
+        # whether traffic is malicious; it prepares chart-friendly aggregates.
         if not packets:
             return {
                 "total_packets": 0,
@@ -105,6 +107,8 @@ class TrafficAnalysisService:
         """
         Classify traffic by application/port type
         """
+        # This is a lightweight port-to-application mapping, so it is useful for
+        # visualization but not meant to be a deep protocol fingerprinting engine.
         port_to_app = {
             80: "HTTP", 443: "HTTPS", 53: "DNS", 25: "SMTP",
             110: "POP3", 143: "IMAP", 3306: "MySQL", 5432: "PostgreSQL",
@@ -287,6 +291,7 @@ class TrafficAnalysisService:
             **sample
         })
         
-        # Maintain max history
+        # Independent helper: keeps the in-memory history bounded so dashboard
+        # sampling does not grow forever during long runs.
         if len(self.traffic_data) > self.max_history:
             self.traffic_data.pop(0)

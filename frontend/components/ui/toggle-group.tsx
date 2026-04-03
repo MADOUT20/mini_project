@@ -1,4 +1,5 @@
 'use client'
+// Shared shadcn/ui wrapper for the toggle group component.
 
 import * as React from 'react'
 import * as ToggleGroupPrimitive from '@radix-ui/react-toggle-group'

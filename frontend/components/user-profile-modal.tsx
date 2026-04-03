@@ -1,3 +1,4 @@
+// User profile modal used for showing account details in the dashboard UI.
 import { User, Mail, Shield } from "lucide-react"
 import {
   Dialog,

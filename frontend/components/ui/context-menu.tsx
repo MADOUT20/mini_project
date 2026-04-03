@@ -1,4 +1,5 @@
 'use client'
+// Shared shadcn/ui wrapper for the context menu component.
 
 import * as React from 'react'
 import * as ContextMenuPrimitive from '@radix-ui/react-context-menu'

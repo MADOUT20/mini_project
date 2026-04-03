@@ -1,3 +1,4 @@
+// Footer shown in the public-facing part of the app.
 import Link from 'next/link'
 import { Shield } from 'lucide-react'
 

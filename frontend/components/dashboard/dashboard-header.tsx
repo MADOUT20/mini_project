@@ -1,4 +1,5 @@
 "use client"
+// Top header for the dashboard, including status and quick actions.
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Bell, Menu, User } from "lucide-react"

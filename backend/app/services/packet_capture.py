@@ -146,6 +146,8 @@ class PacketCaptureService:
         application_protocol: str = "HTTP_PROXY",
     ) -> Dict[str, Any]:
         """Record a packet-like observation from the local HTTP/HTTPS proxy."""
+        # Proxy traffic is converted into the same shape as sniffed packets so
+        # the rest of the backend can analyze both paths without special cases.
         packet_info = {
             "timestamp": datetime.now().isoformat(),
             "size_bytes": max(request_bytes, 0),
@@ -185,6 +187,8 @@ class PacketCaptureService:
     
     def _extract_packet_info(self, packet) -> Dict[str, Any]:
         """Extract relevant information from a packet"""
+        # This is the normalization step that shrinks a raw Scapy packet into the
+        # fields the threat engine and dashboard actually care about.
         packet_info = {
             "timestamp": self._packet_timestamp(packet),
             "size_bytes": len(packet),

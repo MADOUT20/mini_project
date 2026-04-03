@@ -1,4 +1,5 @@
 'use client'
+// Shared shadcn/ui wrapper for the resizable component.
 
 import { GripVertical } from 'lucide-react'
 import * as ResizablePrimitive from 'react-resizable-panels'

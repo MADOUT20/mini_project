@@ -1,4 +1,5 @@
 "use client"
+// Admin panel section for settings, summaries, and response history views.
 
 // ===== Consolidated Admin & Settings =====
 

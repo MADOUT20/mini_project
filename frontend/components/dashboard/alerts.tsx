@@ -1,4 +1,5 @@
 "use client"
+// Alert and notification panels used in the monitoring dashboard.
 
 // ===== Consolidated Alerts & Notifications =====
 

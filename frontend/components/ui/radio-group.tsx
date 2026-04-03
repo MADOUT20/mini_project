@@ -1,4 +1,5 @@
 'use client'
+// Shared shadcn/ui wrapper for the radio group component.
 
 import * as React from 'react'
 import * as RadioGroupPrimitive from '@radix-ui/react-radio-group'

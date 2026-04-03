@@ -1,4 +1,5 @@
 "use client"
+// Traffic, packet capture, and packet inspection views for the dashboard.
 
 import { useEffect, useState } from "react"
 import { Activity, Network, Radar, RefreshCw } from "lucide-react"

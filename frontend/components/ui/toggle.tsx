@@ -1,4 +1,5 @@
 'use client'
+// Shared shadcn/ui wrapper for the toggle component.
 
 import * as React from 'react'
 import * as TogglePrimitive from '@radix-ui/react-toggle'

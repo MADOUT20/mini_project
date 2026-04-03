@@ -44,6 +44,8 @@ class MobileProxyService:
         client_reader: asyncio.StreamReader,
         client_writer: asyncio.StreamWriter,
     ) -> None:
+        # Every mobile request comes through this entry point first. From here we
+        # split normal HTTP requests and HTTPS CONNECT tunnels into separate flows.
         peer = client_writer.get_extra_info("peername")
         source_ip = peer[0] if isinstance(peer, tuple) and peer else None
 
@@ -97,6 +99,8 @@ class MobileProxyService:
         source_ip: Optional[str],
         target: str,
     ) -> None:
+        # CONNECT is the HTTPS path. We can still see the destination host, but
+        # after the tunnel is open the payload stays encrypted end-to-end.
         destination_host, destination_port = self._parse_connect_target(target)
         if not destination_host:
             await self._send_error(client_writer, 400, "Invalid CONNECT target")
@@ -146,6 +150,8 @@ class MobileProxyService:
         version: str,
         headers: dict[str, str],
     ) -> None:
+        # Plain HTTP gives us the host and path directly, so this branch is where
+        # we can log the request, answer connectivity probes, and enforce blocks early.
         destination_host, destination_port, request_path = self._parse_http_target(target, headers)
         if not destination_host:
             await self._send_error(client_writer, 400, "Missing Host header")
@@ -353,6 +359,8 @@ class MobileProxyService:
         destination_port: Optional[int],
         destination_ip: Optional[str],
     ) -> None:
+        # The dashboard's device view reads from this lightweight activity table
+        # instead of scanning the full packet history every refresh.
         if not source_ip:
             return
 
@@ -378,6 +386,9 @@ class MobileProxyService:
         destination_host: Optional[str],
         request_path: str,
     ) -> bool:
+        # Independent helper: phones and laptops probe a few well-known URLs to
+        # decide whether the network has internet. We answer those locally so
+        # proxy mode does not create a false "no internet" state.
         normalized_host = self._normalize_domain(destination_host)
         normalized_path = request_path or "/"
 

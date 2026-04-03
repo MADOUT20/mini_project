@@ -1,3 +1,4 @@
+/* Shared global style layer kept for legacy or auxiliary styling imports. */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

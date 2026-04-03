@@ -1,4 +1,5 @@
 'use client'
+// Reusable frontend hook for use toast behavior.
 
 // Inspired by react-hot-toast library
 import * as React from 'react'

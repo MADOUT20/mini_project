@@ -1,4 +1,5 @@
 'use client'
+// Shared shadcn/ui wrapper for the carousel component.
 
 import * as React from 'react'
 import useEmblaCarousel, {

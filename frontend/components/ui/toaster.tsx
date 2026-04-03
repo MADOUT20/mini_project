@@ -1,4 +1,5 @@
 'use client'
+// Shared shadcn/ui wrapper for the toaster component.
 
 import { useToast } from '@/hooks/use-toast'
 import {

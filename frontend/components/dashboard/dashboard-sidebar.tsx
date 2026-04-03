@@ -1,4 +1,5 @@
 "use client"
+// Dashboard navigation sidebar for desktop and mobile layouts.
 
 import { useState } from "react"
 import Link from "next/link"

@@ -1,3 +1,4 @@
+// Shared shadcn/ui wrapper for the skeleton component.
 import { cn } from '@/lib/utils'
 
 function Skeleton({

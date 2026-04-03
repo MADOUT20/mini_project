@@ -1,3 +1,4 @@
+// Shared shadcn/ui wrapper for the use mobile component.
 import * as React from 'react'
 
 const MOBILE_BREAKPOINT = 768

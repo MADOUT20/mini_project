@@ -1,3 +1,4 @@
+// Root layout for the app shell, theme wiring, and global providers.
 import type { Metadata } from 'next'
 import { ThemeProvider } from '@/components/theme-provider'
 import { KeyboardShortcutsHandler } from '@/components/keyboard-shortcuts-handler'

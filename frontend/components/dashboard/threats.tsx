@@ -1,4 +1,5 @@
 "use client"
+// Threat-focused panels including watch, actions, devices, and blocked sites.
 
 // ===== Consolidated Threats =====
 

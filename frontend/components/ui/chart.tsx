@@ -1,4 +1,5 @@
 'use client'
+// Shared shadcn/ui wrapper for the chart component.
 
 import * as React from 'react'
 import * as RechartsPrimitive from 'recharts'

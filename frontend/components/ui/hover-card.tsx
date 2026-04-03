@@ -1,4 +1,5 @@
 'use client'
+// Shared shadcn/ui wrapper for the hover card component.
 
 import * as React from 'react'
 import * as HoverCardPrimitive from '@radix-ui/react-hover-card'

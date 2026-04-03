@@ -1,4 +1,5 @@
 'use client'
+// Shared shadcn/ui wrapper for the dialog component.
 
 import * as React from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'

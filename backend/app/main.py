@@ -10,6 +10,8 @@ from app.api.routes import (
     admin_router, notifications_router, health_router, users_router, proxy_service
 )
 
+# This file is the FastAPI bootstrap: app creation, middleware, router wiring,
+# and startup/shutdown hooks all live here.
 app = FastAPI(
     title="ChaosFaction API",
     description="Network Security Monitoring API",
@@ -39,6 +41,8 @@ app.include_router(users_router)
 
 @app.on_event("startup")
 async def startup_event():
+    # The proxy is optional, so normal backend use still works even when
+    # phone-proxy mode is turned off.
     proxy_enabled = os.getenv("PROXY_ENABLED", "0").lower() in {"1", "true", "yes", "on"}
     if not proxy_enabled:
         return

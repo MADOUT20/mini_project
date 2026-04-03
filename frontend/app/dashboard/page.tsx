@@ -1,4 +1,5 @@
 "use client"
+// Dashboard page that composes the main monitoring panels and layout.
 
 import { useState, useEffect } from "react"
 import { healthCheck, type HealthCheckResponse } from "../../lib/api"

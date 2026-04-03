@@ -1,4 +1,5 @@
 'use client'
+// Shared shadcn/ui wrapper for the calendar component.
 
 import * as React from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'

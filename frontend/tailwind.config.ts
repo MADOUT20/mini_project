@@ -1,3 +1,4 @@
+// Tailwind theme and content configuration for the frontend design system.
 import type { Config } from 'tailwindcss'
 
 const config: Config = {

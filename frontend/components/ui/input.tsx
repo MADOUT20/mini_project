@@ -1,3 +1,4 @@
+// Shared shadcn/ui wrapper for the input component.
 import * as React from 'react'
 
 import { cn } from '@/lib/utils'

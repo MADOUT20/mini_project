@@ -1,4 +1,5 @@
 "use client"
+// Overview cards that surface the main packet and threat counts.
 
 import { useEffect, useState } from "react"
 import { Activity, ShieldAlert, Server, Workflow } from "lucide-react"

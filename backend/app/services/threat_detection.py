@@ -86,6 +86,8 @@ class ThreatDetectionService:
         auto_detected: List[Dict[str, Any]] = []
 
         if packets:
+            # The order matters here: broad traffic checks first, then watched-site
+            # matching, then the more behavior-heavy malware patterns.
             auto_detected.extend(await self._detect_statistical_anomalies(packets, traffic_stats))
             auto_detected.extend(await self._detect_port_scanning(packets))
             auto_detected.extend(await self._detect_malicious_site_visits(packets))
@@ -255,6 +257,8 @@ class ThreatDetectionService:
             return threats
 
         rule_by_domain = {rule["domain"]: rule for rule in watched_domain_rules}
+        # A watched site can be confirmed by a DNS query, an HTTP/TLS host hint,
+        # or a destination IP that belongs to the watched domain.
         matched_queries = defaultdict(
             lambda: {
                 "packet_count": 0,
@@ -1225,6 +1229,8 @@ class ThreatDetectionService:
         response_message = f"Threat {threat_id} {past_tense}"
 
         if action == "BLOCK":
+            # If the threat points to a domain, we block it at the proxy layer.
+            # Otherwise we fall back to the softer dashboard-side IP block.
             blocked_domain = self._domain_to_block_for_threat(threat)
             source_ip = threat.get("source_ip")
 
@@ -1428,6 +1434,8 @@ class ThreatDetectionService:
         evidence: Optional[List[str]] = None,
         classification: str = "confirmed",
     ) -> Dict[str, Any]:
+        # Independent helper: every detector funnels through this so the threat
+        # shape stays consistent no matter which rule created it.
         threat = {
             "id": self._build_threat_id(
                 threat_type=threat_type,

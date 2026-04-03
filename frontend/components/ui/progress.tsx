@@ -1,4 +1,5 @@
 'use client'
+// Shared shadcn/ui wrapper for the progress component.
 
 import * as React from 'react'
 import * as ProgressPrimitive from '@radix-ui/react-progress'

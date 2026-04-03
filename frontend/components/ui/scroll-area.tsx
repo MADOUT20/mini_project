@@ -1,4 +1,5 @@
 'use client'
+// Shared shadcn/ui wrapper for the scroll area component.
 
 import * as React from 'react'
 import * as ScrollAreaPrimitive from '@radix-ui/react-scroll-area'

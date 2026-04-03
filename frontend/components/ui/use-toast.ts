@@ -1,4 +1,5 @@
 'use client'
+// Shared shadcn/ui wrapper for the use toast component.
 
 // Inspired by react-hot-toast library
 import * as React from 'react'

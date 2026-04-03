@@ -1,4 +1,5 @@
 'use client'
+// Shared shadcn/ui wrapper for the sonner component.
 
 import { useTheme } from 'next-themes'
 import { Toaster as Sonner } from 'sonner'

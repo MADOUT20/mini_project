@@ -1,4 +1,5 @@
 'use client'
+// Shared shadcn/ui wrapper for the separator component.
 
 import * as React from 'react'
 import * as SeparatorPrimitive from '@radix-ui/react-separator'

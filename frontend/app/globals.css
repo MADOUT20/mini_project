@@ -1,3 +1,4 @@
+/* Global Tailwind and app-wide visual styling for the main frontend app. */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

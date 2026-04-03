@@ -1,4 +1,5 @@
 'use client'
+// Shared shadcn/ui wrapper for the checkbox component.
 
 import * as React from 'react'
 import * as CheckboxPrimitive from '@radix-ui/react-checkbox'

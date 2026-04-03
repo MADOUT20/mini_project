@@ -1,3 +1,4 @@
+// Next.js runtime configuration, including backend rewrites/proxy settings.
 const backendApiUrl =
   process.env.BACKEND_API_URL ||
   process.env.NEXT_PUBLIC_API_URL ||

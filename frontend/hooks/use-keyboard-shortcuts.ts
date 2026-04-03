@@ -1,3 +1,4 @@
+// Reusable frontend hook for use keyboard shortcuts behavior.
 import { useEffect } from 'react'
 
 export function useKeyboardShortcuts() {

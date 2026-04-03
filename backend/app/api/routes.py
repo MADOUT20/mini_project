@@ -14,12 +14,16 @@ from app.services.threat_detection import ThreatDetectionService
 from app.services.traffic_analysis import TrafficAnalysisService
 
 # ===== Initialize Services =====
+# These service instances hold the backend state that the route handlers expose
+# to the frontend: packets, threats, proxy status, and traffic summaries.
 packet_service = PacketCaptureService()
 threat_service = ThreatDetectionService()
 proxy_service = MobileProxyService(packet_service, threat_service)
 traffic_service = TrafficAnalysisService()
 
 # ===== Request/Response Models =====
+# These Pydantic models are local API-side shapes used for request/response typing
+# inside this routes module.
 
 class TrafficStats(BaseModel):
     timestamp: datetime
@@ -62,7 +66,8 @@ traffic_router = APIRouter(prefix="/api/traffic", tags=["Traffic Analysis"])
 async def get_traffic(time_range: str = Query("hour", description="Time range for analysis")):
     """Get network traffic statistics with real packet data"""
     try:
-        # Get packets from service
+        # This endpoint is the traffic dashboard entry point: pull the current
+        # packet snapshot first, then layer summaries on top of it.
         packets = packet_service.packets
         stats = await packet_service.get_packet_statistics()
         
@@ -168,7 +173,8 @@ async def get_threats(
 ):
     """Get detected threats with real anomaly detection"""
     try:
-        # Get current packets and stats
+        # Threat routes do not store a separate threat database. They derive the
+        # current threat list from the latest captured/proxied traffic.
         packets = packet_service.packets
         stats = await packet_service.get_packet_statistics()
         
@@ -368,6 +374,8 @@ async def start_capture(
 ):
     """Start packet capture"""
     try:
+        # Capture prefers an explicit interface, then an env override, then the
+        # backend's best guess for the active interface.
         capture_interface = (
             interface
             or os.getenv("CAPTURE_INTERFACE")
@@ -425,6 +433,8 @@ admin_router = APIRouter(prefix="/api/admin", tags=["Admin"])
 @admin_router.get("/proxy-status")
 async def get_proxy_status():
     """Return local proxy status for mobile testing."""
+    # The frontend uses this to drive the Observed Devices card and the
+    # proxy online/offline badge.
     proxy_port = int(os.getenv("PROXY_PORT", "8888"))
     return {
         "enabled": os.getenv("PROXY_ENABLED", "0").lower() in {"1", "true", "yes", "on"},
@@ -461,6 +471,8 @@ async def unblock_site(domain: str):
 async def admin_dashboard():
     """Admin dashboard overview"""
     try:
+        # This is the high-level overview API used by the dashboard cards.
+        # It intentionally counts low-severity threats separately.
         packets = packet_service.packets
         stats = await packet_service.get_packet_statistics()
         threats = await threat_service.detect_threats(packets, stats) if packets else []
@@ -592,6 +604,8 @@ notifications_router = APIRouter(prefix="/api/notifications", tags=["Notificatio
 @notifications_router.get("")
 async def get_notifications():
     """Get recent notifications"""
+    # Notifications are a mix of stored response-action events and live threat
+    # notifications generated from the current threat snapshot.
     packets = packet_service.packets
     stats = await packet_service.get_packet_statistics()
     threats = await threat_service.detect_threats(packets, stats)

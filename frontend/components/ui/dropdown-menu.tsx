@@ -1,4 +1,5 @@
 'use client'
+// Shared shadcn/ui wrapper for the dropdown menu component.
 
 import * as React from 'react'
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu'

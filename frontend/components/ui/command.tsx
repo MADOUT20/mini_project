@@ -1,4 +1,5 @@
 'use client'
+// Shared shadcn/ui wrapper for the command component.
 
 import * as React from 'react'
 import { type DialogProps } from '@radix-ui/react-dialog'

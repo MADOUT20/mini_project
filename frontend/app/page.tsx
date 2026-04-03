@@ -1,4 +1,5 @@
 "use client"
+// Landing page entry point for the public-facing frontend experience.
 
 import Link from "next/link"
 import {

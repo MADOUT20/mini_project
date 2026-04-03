@@ -2,6 +2,8 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 
+# These schemas are typed data containers. They describe what a packet,
+# threat, notification, or settings object should look like.
 class Packet(BaseModel):
     id: int
     timestamp: datetime

@@ -1,4 +1,5 @@
 'use client'
+// Shared shadcn/ui wrapper for the label component.
 
 import * as React from 'react'
 import * as LabelPrimitive from '@radix-ui/react-label'

@@ -1,4 +1,5 @@
 'use client'
+// Shared shadcn/ui wrapper for the sheet component.
 
 import * as React from 'react'
 import * as SheetPrimitive from '@radix-ui/react-dialog'

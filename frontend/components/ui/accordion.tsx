@@ -1,4 +1,5 @@
 'use client'
+// Shared shadcn/ui wrapper for the accordion component.
 
 import * as React from 'react'
 import * as AccordionPrimitive from '@radix-ui/react-accordion'

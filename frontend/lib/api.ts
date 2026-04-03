@@ -1,3 +1,4 @@
+// Central frontend API client used to talk to the FastAPI backend.
 // API Utility Functions for ChaosFaction Backend
 
 const DEFAULT_HEADERS = {

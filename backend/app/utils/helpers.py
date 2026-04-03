@@ -9,6 +9,7 @@ from typing import Any, Dict
 
 def log_event(event_type: str, details: Dict[str, Any]):
     """Log an event to the system"""
+    # Small standalone helper for structured console logging.
     log_entry = {
         "timestamp": datetime.now().isoformat(),
         "type": event_type,
@@ -23,7 +24,7 @@ def hash_ip(ip: str) -> str:
 
 def parse_packet_data(raw_packet: bytes) -> Dict[str, Any]:
     """Parse raw packet data into structured format"""
-    # This is a placeholder - implement actual packet parsing
+    # This is currently a placeholder and is not part of the active backend flow.
     pass
 
 def format_bytes(bytes_value: int) -> str:
