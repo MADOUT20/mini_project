@@ -1,0 +1,74 @@
+PROJECT CODE SNAPSHOTS TO TAKE
+
+These are the code areas worth adding to the project file. Focus on the main logic and workflow files, not generated or library files.
+
+1. Root level
+- README.md
+  Use this for the project title, short description, and how the system runs.
+- scripts/
+  Take snapshots from:
+  - scripts/dev-local-capture.sh
+  - scripts/dev-local-capture.ps1
+  These show how capture mode and proxy mode are started on Mac and Windows.
+- .env.example
+  Use this only if you want to show how threat domains and config are provided.
+
+2. Backend folder
+- backend/app/main.py
+  Shows FastAPI startup, router loading, and proxy startup/shutdown flow.
+- backend/app/api/routes.py
+  Shows the API endpoints used by the dashboard, threat actions, notifications, and device monitoring.
+- backend/app/services/packet_capture.py
+  Important for live packet capture, packet normalization, and storing captured traffic.
+- backend/app/services/mobile_proxy.py
+  Important for mobile proxy traffic, blocked site handling, and multi-device tracking.
+- backend/app/services/threat_detection.py
+  Most important backend file. This is where threat checks, severity logic, and block/unblock actions happen.
+- backend/app/services/traffic_analysis.py
+  Good for showing how captured traffic is turned into dashboard data.
+- backend/app/models/schemas.py
+  Use this if you want to show request/response structure or data models.
+
+3. Frontend folder
+- frontend/app/dashboard/page.tsx
+  Shows the dashboard page structure.
+- frontend/lib/api.ts
+  Shows how frontend talks to the backend.
+- frontend/components/dashboard/stat-cards.tsx
+  Shows overview cards and threat counts.
+- frontend/components/dashboard/traffic.tsx
+  Important for packet capture controls and packet inspection.
+- frontend/components/dashboard/threats.tsx
+  Important for threat display, device view, and block/unblock actions.
+- frontend/components/dashboard/alerts.tsx
+  Shows notifications and active alerts.
+- frontend/components/dashboard/admin.tsx
+  Use this for action taken history and admin response flow.
+- frontend/components/dashboard/dashboard-header.tsx
+  Good if you want to show the top-level live dashboard controls.
+- frontend/components/dashboard/dashboard-sidebar.tsx
+  Use this only if you want to show the navigation structure.
+
+4. Best order for screenshots in the project file
+- README.md
+- backend/app/main.py
+- backend/app/services/packet_capture.py
+- backend/app/services/mobile_proxy.py
+- backend/app/services/threat_detection.py
+- backend/app/api/routes.py
+- frontend/lib/api.ts
+- frontend/app/dashboard/page.tsx
+- frontend/components/dashboard/traffic.tsx
+- frontend/components/dashboard/threats.tsx
+- frontend/components/dashboard/alerts.tsx
+- frontend/components/dashboard/admin.tsx
+
+5. Files you should NOT waste screenshots on
+- node_modules
+- frontend/.next
+- __pycache__
+- *.pyc
+- tsconfig.tsbuildinfo
+- .DS_Store
+- lock files unless your teacher specifically asks for dependency proof
+- very small UI helper files unless you need them for explanation
